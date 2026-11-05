@@ -1,6 +1,25 @@
 import type { BeadSize, Board, Cell } from './types';
 
 export const BOARD_SIZE = 29;
+export const DEFAULT_GRID_CELLS = BOARD_SIZE * BOARD_SIZE;
+
+/**
+ * Recommend a bead grid that preserves the source aspect ratio while keeping
+ * roughly the same bead count as the default 29x29 board (841 cells).
+ */
+export function recommendGridSize(
+  imageWidth: number,
+  imageHeight: number,
+  targetCells = DEFAULT_GRID_CELLS,
+): { w: number; h: number } {
+  const ratio = Math.max(1, imageWidth) / Math.max(1, imageHeight);
+  const clamp = (value: number) => Math.max(1, Math.min(200, Math.round(value)));
+  // Derive height from width using the exact ratio so the recommendation
+  // matches the ratio-lock input handler (which does the same).
+  const w = clamp(Math.sqrt(targetCells * ratio));
+  const h = clamp(w / ratio);
+  return { w, h };
+}
 
 export function splitBoards(cells: Cell[], w: number, h: number, size = BOARD_SIZE): Board[] {
   const boards: Board[] = [];

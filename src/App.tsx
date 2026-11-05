@@ -8,6 +8,7 @@ import LibraryView from './views/LibraryView';
 import StudioView from './views/StudioView';
 import type { Tool } from './views/StudioView';
 import { ConfirmModal, Toast } from './components/ui';
+import { recommendGridSize } from './core/boards';
 import { quantizeGrid, sampleGrid } from './core/convert';
 import { optimizeGrid } from './core/optimize';
 import { createPattern, parsePattern, serialize, touch } from './core/pattern';
@@ -79,6 +80,10 @@ function downloadBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function describeRatio(ratio: number): string {
+  return ratio >= 1 ? `约 ${ratio.toFixed(2)} : 1` : `约 1 : ${(1 / ratio).toFixed(2)}`;
+}
+
 export default function App() {
   const [view, setView] = useState<View>('studio');
   const [status, setStatus] = useState<Status>('empty');
@@ -95,6 +100,9 @@ export default function App() {
   const [tool, setTool] = useState<Tool>('brush');
   const [activeCode, setActiveCode] = useState(getPalette(DEFAULT_PALETTE_ID).colors[0].code);
   const [approximated, setApproximated] = useState(0);
+  const [generated, setGenerated] = useState(false);
+  const [sourceRatio, setSourceRatio] = useState<number | null>(null);
+  const [lockRatio, setLockRatio] = useState(true);
   const [history, setHistory] = useState<History>({ past: [], future: [] });
   const [dirty, setDirty] = useState(false);
   const [segment, setSegment] = useState<SegmentProgress | null>(null);
@@ -148,7 +156,8 @@ export default function App() {
 
   /* ---------- conversion pipeline ---------- */
   useEffect(() => {
-    if (!source) return;
+    // Uploading only stages the image; conversion waits for an explicit click.
+    if (!source || !generated) return;
     const id = ++requestRef.current;
     setStatus('loading');
     const timer = window.setTimeout(() => {
@@ -185,7 +194,7 @@ export default function App() {
       }
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [source, params, paletteId, beadSize, notify]);
+  }, [source, params, paletteId, beadSize, generated, notify]);
 
   /* ---------- image input ---------- */
   const loadFile = useCallback(async (file: File) => {
@@ -212,17 +221,27 @@ export default function App() {
       const url = URL.createObjectURL(file);
       objectUrlRef.current = url;
 
+      const ratio = width / height;
+      const recommended = recommendGridSize(width, height);
       setSource(imageData);
       setOriginalSource(imageData);
       setSegmentApplied(false);
+      setGenerated(false);
+      setSourceRatio(ratio);
+      setPattern(null);
+      setApproximated(0);
       setSourceBlob(file);
       setSourceUrl(url);
       setSourceName(file.name);
-      setParams((current) => ({ ...current, width: Math.min(current.width, 200), height: Math.min(current.height, 200) }));
+      setParams((current) => ({ ...current, width: recommended.w, height: recommended.h }));
+      setStatus('empty');
       setHistory({ past: [], future: [] });
       setDirty(false);
       setView('studio');
-      if (file.size > MAX_IMAGE_BYTES || scale < 1) notify('图片较大，已自动降采样后处理');
+      const downscaled = file.size > MAX_IMAGE_BYTES || scale < 1 ? '（图片较大，已降采样）' : '';
+      notify(
+        `已载入${describeRatio(ratio)}的图片，按原比例推荐 ${recommended.w}×${recommended.h} 格${downscaled}；确认参数后点「生成图纸」`,
+      );
     } catch (error) {
       setStatus('error');
       notify(error instanceof Error ? error.message : '图片读取失败', 'error');
@@ -245,7 +264,18 @@ export default function App() {
 
   /* ---------- config changes ---------- */
   const applyConfig = (patch: { params?: Partial<ConvertParams>; paletteId?: string; beadSize?: BeadSize }) => {
-    if (patch.params) setParams((current) => ({ ...current, ...patch.params }));
+    const paramsPatch = patch.params;
+    if (paramsPatch) {
+      setParams((current) => {
+        const next = { ...current, ...paramsPatch };
+        if (lockRatio && sourceRatio) {
+          const clamp = (value: number) => Math.max(1, Math.min(200, Math.round(value)));
+          if ('width' in paramsPatch) next.height = clamp(next.width / sourceRatio);
+          else if ('height' in paramsPatch) next.width = clamp(next.height * sourceRatio);
+        }
+        return next;
+      });
+    }
     if (patch.paletteId) {
       setPaletteId(patch.paletteId);
       const colors = getPalette(patch.paletteId).colors;
@@ -289,6 +319,19 @@ export default function App() {
     }
   };
 
+  /** First click generates; later clicks behave as the existing regenerate. */
+  const generateOrRegenerate = () => {
+    if (!source) {
+      notify('请先上传一张图片', 'error');
+      return;
+    }
+    if (!generated) {
+      setGenerated(true);
+      return;
+    }
+    regenerate();
+  };
+
   /* ---------- AI background removal ---------- */
   const doSegment = async () => {
     if (!sourceBlob) {
@@ -317,7 +360,11 @@ export default function App() {
       }
       setSource(imageData);
       setSegmentApplied(true);
-      notify('去背景完成，透明区域已设为不放豆。效果不理想可点「恢复原图」回退');
+      notify(
+        generated
+          ? '去背景完成，图纸已按新原图重算；效果不理想可点「恢复原图」回退'
+          : '去背景完成，点「生成图纸」查看效果；不理想可点「恢复原图」回退',
+      );
     } catch (error) {
       notify(error instanceof Error ? error.message : '智能去背景失败，可用橡皮手动擦除', 'error');
     } finally {
@@ -342,7 +389,11 @@ export default function App() {
       );
       setSegmentApplied(false);
       setConfirm(null);
-      notify('已恢复去背景前的原图，图纸重新生成');
+      notify(
+        generated
+          ? '已恢复去背景前的原图，图纸已重新生成'
+          : '已恢复去背景前的原图，可点「生成图纸」重新出图',
+      );
     };
     if (dirty) {
       setConfirm({
@@ -481,6 +532,9 @@ export default function App() {
     setSourceBlob(null);
     setOriginalSource(null);
     setSegmentApplied(false);
+    setGenerated(true);
+    setSourceRatio(null);
+    setApproximated(0);
     setPattern(target);
     setParams(target.params);
     setPaletteId(target.paletteId);
@@ -607,6 +661,10 @@ export default function App() {
             segment={segment}
             segmentApplied={segmentApplied}
             approximated={approximated}
+            generated={generated}
+            ratioLabel={sourceRatio ? describeRatio(sourceRatio) : ''}
+            lockRatio={lockRatio}
+            onLockRatio={setLockRatio}
             canUndo={history.past.length > 0}
             canRedo={history.future.length > 0}
             tool={tool}
@@ -615,7 +673,7 @@ export default function App() {
             onParam={(patch) => changeConfig({ params: patch })}
             onPalette={(id) => changeConfig({ paletteId: id })}
             onBeadSize={(size) => changeConfig({ beadSize: size })}
-            onRegenerate={regenerate}
+            onRegenerate={generateOrRegenerate}
             onSegment={() => void doSegment()}
             onRevertSegment={revertSegment}
             onTool={setTool}

@@ -409,6 +409,14 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
 .library .table-row:hover { background: #f2ecdc; }
 .empty-state { display: grid; justify-items: center; gap: var(--s2); padding: var(--s5) var(--s3); text-align: center; color: var(--text-dim); }
 .empty-state svg { color: var(--accent); }
+.pending-preview {
+  max-width: 100%;
+  max-height: calc(var(--font-size) * 18);
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-paper);
+}
 
 /* ---------- modal / toast ---------- */
 .modal-mask {

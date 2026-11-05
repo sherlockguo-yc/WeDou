@@ -40,6 +40,10 @@ export interface StudioProps {
   segment: SegmentProgress | null;
   segmentApplied: boolean;
   approximated: number;
+  generated: boolean;
+  ratioLabel: string;
+  lockRatio: boolean;
+  onLockRatio: (value: boolean) => void;
   canUndo: boolean;
   canRedo: boolean;
   tool: Tool;
@@ -194,6 +198,11 @@ export default function StudioView(props: StudioProps) {
             <h2>3 · 定图纸</h2>
             <Grid2X2 size={16} />
           </div>
+          {props.hasSource && props.ratioLabel ? (
+            <div className="eyebrow" style={{ marginBottom: 'var(--s2)' }}>
+              原图比例 {props.ratioLabel} · 推荐 {props.params.width}×{props.params.height} 格（约 841 颗豆，与 29×29 相当）
+            </div>
+          ) : null}
           <div className="field-row field">
             <div className="field" style={{ marginBottom: 0 }}>
               <label>宽（格）</label>
@@ -229,12 +238,20 @@ export default function StudioView(props: StudioProps) {
               onChange={(event) => props.onParam({ maxColors: Number(event.target.value) })}
             />
           </div>
+          <Toggle
+            label="锁定原图比例"
+            hint="改宽或高时另一边自动联动"
+            checked={props.lockRatio}
+            onChange={props.onLockRatio}
+            disabled={!props.ratioLabel}
+          />
           <Toggle label="透明区留空" hint="不放豆，不等于白色" checked={props.params.transparentAsEmpty} onChange={(value) => props.onParam({ transparentAsEmpty: value })} />
           <Toggle label="去掉孤立单颗豆" hint="减少难拼的杂点" checked={props.params.removeIsolated} onChange={(value) => props.onParam({ removeIsolated: value })} />
           <Toggle label="合并小色块" checked={props.params.mergeSmallRegions} onChange={(value) => props.onParam({ mergeSmallRegions: value })} />
           <Toggle label="色彩抖动" hint="渐变更细腻，但会产生更多杂点" checked={props.params.dithering} onChange={(value) => props.onParam({ dithering: value })} />
           <button className="btn primary" style={{ width: '100%', marginTop: 'var(--s2)' }} onClick={props.onRegenerate} disabled={!props.hasSource || busy}>
-            <RotateCcw size={15} /> 重新生成
+            {props.generated ? <RotateCcw size={15} /> : <LayoutGrid size={15} />}
+            {props.generated ? '重新生成' : '生成图纸'}
           </button>
         </section>
       </div>
@@ -242,11 +259,36 @@ export default function StudioView(props: StudioProps) {
       <div className="studio-main">
         {!props.pattern ? (
           <section className="panel">
-            <div className="empty-state">
-              <LayoutGrid size={40} />
-              <h2>图纸会在这里长出来</h2>
-              <p>先放一张图，选好色板和尺寸，就能得到带色号、坐标和用量的施工图。</p>
-            </div>
+            {props.hasSource ? (
+              <div className="empty-state">
+                <ImageIcon size={40} />
+                <h2>原图已就绪，等你确认</h2>
+                <p>
+                  检测到{props.ratioLabel}的比例，按原比例推荐 {props.params.width}×{props.params.height} 格。
+                  选好色板与参数后，点下面的按钮生成图纸。
+                </p>
+                {props.sourceUrl ? (
+                  <img
+                    className="pending-preview"
+                    src={props.sourceUrl}
+                    alt="待生成的原图"
+                    data-fb={'<span class="thumb-fallback">?</span>'}
+                    onError={(event) => {
+                      event.currentTarget.outerHTML = event.currentTarget.dataset.fb ?? '';
+                    }}
+                  />
+                ) : null}
+                <button className="btn primary" onClick={props.onRegenerate} disabled={busy}>
+                  <LayoutGrid size={16} /> 生成图纸
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <LayoutGrid size={40} />
+                <h2>图纸会在这里长出来</h2>
+                <p>先放一张图，确认推荐的尺寸与色板，再点「生成图纸」得到带色号、坐标和用量的施工图。</p>
+              </div>
+            )}
           </section>
         ) : (
           <>
