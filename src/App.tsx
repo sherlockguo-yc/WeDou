@@ -13,6 +13,13 @@ import { quantizeImage } from './core/convert';
 import { optimizeGrid } from './core/optimize';
 import { createPattern, parsePattern, serialize, touch } from './core/pattern';
 import { DEFAULT_PALETTE_ID, getPalette } from './core/palettes';
+import {
+  isTogglePatch,
+  preferencesFromParams,
+  readTogglePreferences,
+  withTogglePreferences,
+  writeTogglePreferences,
+} from './core/preferences';
 import { removeBackground } from './core/segment';
 import type { SegmentProgress } from './core/segment';
 import { DEFAULT_PARAMS } from './core/types';
@@ -41,6 +48,15 @@ function readDrafts(): Pattern[] {
   } catch {
     return [];
   }
+}
+
+/** Restores remembered switches once, at page load; sizes still come from the image. */
+function initialStudioState(): { params: ConvertParams; lockRatio: boolean } {
+  const preferences = readTogglePreferences();
+  return {
+    params: withTogglePreferences(DEFAULT_PARAMS, preferences),
+    lockRatio: preferences.lockRatio,
+  };
 }
 
 function upsertDraft(pattern: Pattern): Pattern[] {
@@ -94,7 +110,8 @@ export default function App() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourceName, setSourceName] = useState('');
   const [pattern, setPattern] = useState<Pattern | null>(null);
-  const [params, setParams] = useState<ConvertParams>(DEFAULT_PARAMS);
+  const [initial] = useState(initialStudioState);
+  const [params, setParams] = useState<ConvertParams>(initial.params);
   const [paletteId, setPaletteId] = useState(DEFAULT_PALETTE_ID);
   const [beadSize, setBeadSize] = useState<BeadSize>('5mm');
   const [tool, setTool] = useState<Tool>('brush');
@@ -102,7 +119,7 @@ export default function App() {
   const [approximated, setApproximated] = useState(0);
   const [generated, setGenerated] = useState(false);
   const [sourceRatio, setSourceRatio] = useState<number | null>(null);
-  const [lockRatio, setLockRatio] = useState(true);
+  const [lockRatio, setLockRatio] = useState(initial.lockRatio);
   const [history, setHistory] = useState<History>({ past: [], future: [] });
   const [dirty, setDirty] = useState(false);
   const [segment, setSegment] = useState<SegmentProgress | null>(null);
@@ -112,7 +129,6 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [cloud, setCloud] = useState<Pattern[]>([]);
   const [drafts, setDrafts] = useState<Pattern[]>(readDrafts);
-
   const requestRef = useRef(0);
   const patternRef = useRef<Pattern | null>(null);
   const nameRef = useRef('');
@@ -262,9 +278,18 @@ export default function App() {
   }, []);
 
   /* ---------- config changes ---------- */
+  /** Only explicit user switches are remembered; opening a saved pattern must not overwrite them. */
+  const changeLockRatio = (value: boolean) => {
+    setLockRatio(value);
+    writeTogglePreferences(preferencesFromParams(params, value));
+  };
+
   const applyConfig = (patch: { params?: Partial<ConvertParams>; paletteId?: string; beadSize?: BeadSize }) => {
     const paramsPatch = patch.params;
     if (paramsPatch) {
+      if (isTogglePatch(paramsPatch)) {
+        writeTogglePreferences(preferencesFromParams({ ...params, ...paramsPatch }, lockRatio));
+      }
       setParams((current) => {
         const next = { ...current, ...paramsPatch };
         if (lockRatio && sourceRatio) {
@@ -663,7 +688,7 @@ export default function App() {
             generated={generated}
             ratioLabel={sourceRatio ? describeRatio(sourceRatio) : ''}
             lockRatio={lockRatio}
-            onLockRatio={setLockRatio}
+            onLockRatio={changeLockRatio}
             canUndo={history.past.length > 0}
             canRedo={history.future.length > 0}
             tool={tool}
