@@ -28,9 +28,14 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   me: () => request<{ user: User | null }>('/api/auth/me'),
   register: (username: string, password: string) =>
-    request<{ user: User }>('/api/auth/register', {
+    request<{ user: User; recoveryCode: string }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
+    }),
+  resetPassword: (username: string, recoveryCode: string, newPassword: string) =>
+    request<{ user: User; recoveryCode: string }>('/api/auth/reset', {
+      method: 'POST',
+      body: JSON.stringify({ username, recoveryCode, newPassword }),
     }),
   login: (username: string, password: string) =>
     request<{ user: User }>('/api/auth/login', {

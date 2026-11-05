@@ -3,8 +3,24 @@ import express from 'express';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { clearSession, login, publicUser, register, requireUser, setSession, userFromRequest } from './auth.mjs';
-import { getUserPatterns, saveUserPatterns } from './store.mjs';
+import {
+  clearSession,
+  login,
+  publicUser,
+  register,
+  requireUser,
+  resetPassword,
+  setSession,
+  userFromRequest,
+} from './auth.mjs';
+import {
+  backupNow,
+  getPattern,
+  initDb,
+  listPatterns,
+  removePattern,
+  upsertPattern,
+} from './store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const app = express();
@@ -36,12 +52,16 @@ function validPattern(pattern) {
   );
 }
 
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, storage: 'sqlite', ...(backupNow() ?? {}) });
+});
+
 app.post('/api/auth/register', (req, res) => {
   try {
     const { username, password } = validate(req.body);
-    const user = register(username, password);
+    const { user, recoveryCode } = register(username, password);
     setSession(res, user);
-    res.json({ user: publicUser(user) });
+    res.json({ user: publicUser(user), recoveryCode });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -58,7 +78,22 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/reset', (req, res) => {
+  try {
+    const username = String(req.body?.username ?? '').trim();
+    const code = String(req.body?.recoveryCode ?? '').trim();
+    const newPassword = String(req.body?.newPassword ?? '');
+    if (!code) throw new Error('请输入恢复码');
+    if (newPassword.length < 6 || newPassword.length > 128) throw new Error('新密码需至少 6 个字符');
+    const { user, recoveryCode } = resetPassword(username, code, newPassword);
+    setSession(res, user);
+    res.json({ user: publicUser(user), recoveryCode });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/logout', (_req, res) => {
   clearSession(res);
   res.json({ ok: true });
 });
@@ -71,7 +106,7 @@ app.get('/api/auth/me', (req, res) => {
 app.get('/api/patterns', (req, res) => {
   const user = requireUser(req, res);
   if (!user) return;
-  res.json({ patterns: getUserPatterns(user.id) });
+  res.json({ patterns: listPatterns(user.id) });
 });
 
 app.post('/api/patterns', (req, res) => {
@@ -82,27 +117,19 @@ app.post('/api/patterns', (req, res) => {
     res.status(400).json({ error: '工程数据不合法' });
     return;
   }
-  const patterns = getUserPatterns(user.id);
-  const existing = patterns.findIndex((item) => item.id === pattern.id);
-  if (existing >= 0) {
-    const stored = patterns[existing];
-    if ((stored.version ?? 1) > (pattern.version ?? 1)) {
-      res.status(409).json({ error: '云端版本较新', pattern: stored });
-      return;
-    }
-    patterns[existing] = pattern;
-  } else {
-    patterns.push(pattern);
+  const stored = getPattern(user.id, pattern.id);
+  if (stored && (stored.version ?? 1) > (pattern.version ?? 1)) {
+    res.status(409).json({ error: '云端版本较新', pattern: stored });
+    return;
   }
-  saveUserPatterns(user.id, patterns);
+  upsertPattern(user.id, pattern);
   res.json({ pattern });
 });
 
 app.delete('/api/patterns/:id', (req, res) => {
   const user = requireUser(req, res);
   if (!user) return;
-  const patterns = getUserPatterns(user.id).filter((item) => item.id !== req.params.id);
-  saveUserPatterns(user.id, patterns);
+  removePattern(user.id, req.params.id);
   res.json({ ok: true });
 });
 
@@ -116,6 +143,8 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: error.message ?? '服务器错误' });
 });
 
+await initDb();
+
 app.listen(PORT, () => {
-  console.log(`WeDou server listening on http://localhost:${PORT}`);
+  console.log(`WeDou server listening on http://localhost:${PORT} (SQLite storage)`);
 });

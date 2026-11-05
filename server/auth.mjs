@@ -1,5 +1,13 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { getOrCreateSecret, getUsers, saveUsers } from './store.mjs';
+import {
+  createUser,
+  findUserById,
+  findUserByName,
+  getOrCreateSecret,
+  hashRecoveryCode,
+  newRecoveryCode,
+  updateCredentials,
+} from './store.mjs';
 
 const COOKIE = 'wedou_session';
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -54,21 +62,37 @@ export function publicUser(user) {
 }
 
 export function register(username, password) {
-  const users = getUsers();
-  if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
-    throw new Error('该用户名已被使用');
-  }
+  if (findUserByName(username)) throw new Error('该用户名已被使用');
   const { salt, hash } = hashPassword(password);
-  const user = { id: randomBytes(12).toString('hex'), username, salt, hash, createdAt: new Date().toISOString() };
-  users.push(user);
-  saveUsers(users);
-  return user;
+  const recoveryCode = newRecoveryCode();
+  const user = createUser({
+    username,
+    passwordHash: hash,
+    salt,
+    recoveryHash: hashRecoveryCode(recoveryCode),
+  });
+  return { user, recoveryCode };
 }
 
 export function login(username, password) {
-  const user = getUsers().find((item) => item.username.toLowerCase() === username.toLowerCase());
+  const user = findUserByName(username);
   if (!user || !checkPassword(password, user.salt, user.hash)) throw new Error('用户名或密码不正确');
   return user;
+}
+
+/** Recovery codes replace email-based reset: no external service, no credentials. */
+export function resetPassword(username, recoveryCode, newPassword) {
+  const user = findUserByName(username);
+  if (!user || !user.recoveryHash) throw new Error('用户名或恢复码不正确');
+  const supplied = Buffer.from(hashRecoveryCode(recoveryCode), 'hex');
+  const stored = Buffer.from(user.recoveryHash, 'hex');
+  if (supplied.length !== stored.length || !timingSafeEqual(supplied, stored)) {
+    throw new Error('用户名或恢复码不正确');
+  }
+  const { salt, hash } = hashPassword(newPassword);
+  const nextCode = newRecoveryCode();
+  updateCredentials(user.id, hash, salt, hashRecoveryCode(nextCode));
+  return { user: { ...user, hash, salt }, recoveryCode: nextCode };
 }
 
 export function setSession(res, user) {
@@ -88,7 +112,7 @@ export function clearSession(res) {
 export function userFromRequest(req) {
   const payload = verify(req.cookies?.[COOKIE]);
   if (!payload) return null;
-  return getUsers().find((user) => user.id === payload.sub) ?? null;
+  return findUserById(payload.sub);
 }
 
 export function requireUser(req, res) {
