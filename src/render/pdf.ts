@@ -18,6 +18,38 @@ function inkFor(hex: string): [number, number, number] {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? [34, 59, 50] : [247, 243, 232];
 }
 
+/**
+ * jsPDF's built-in fonts have no CJK glyphs. Embedding a full Chinese font
+ * would add tens of MB to every PDF, and a static subset cannot cover names
+ * users invent. Draw the title with the browser's system font at 3x instead.
+ * ASCII-only titles keep using selectable native text.
+ */
+export function renderTitleImage(
+  text: string,
+): { dataUrl: string; widthMm: number; heightMm: number } | null {
+  if (/^[\x20-\x7E]+$/.test(text)) return null;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const fontPx = 40;
+  const font = `700 ${fontPx}px "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif`;
+  ctx.font = font;
+  const width = Math.ceil(ctx.measureText(text).width) + 12;
+  const height = Math.ceil(fontPx * 1.4);
+  const scale = 3;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  ctx.scale(scale, scale);
+  ctx.font = font;
+  ctx.fillStyle = '#223B32';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 6, height / 2);
+  const heightMm = 5.2;
+  const maxWidth = PAGE_W - MARGIN * 2;
+  const widthMm = Math.min(maxWidth, heightMm * (width / height));
+  return { dataUrl: canvas.toDataURL('image/png'), widthMm, heightMm };
+}
+
 /** One A4 page per 29x29 board, with global coordinates and a per-colour count. */
 export async function exportPatternPdf(pattern: Pattern, filename: string): Promise<number> {
   const { jsPDF } = await import('jspdf');
@@ -31,10 +63,16 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
   boards.forEach((board, pageIndex) => {
     if (pageIndex > 0) doc.addPage();
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
     doc.setTextColor(34, 59, 50);
-    doc.text(pattern.name.replace(/[^\x20-\x7E]/g, 'BEAD CHART'), MARGIN, 14);
+    const title = (pattern.name || 'BEAD CHART').trim() || 'BEAD CHART';
+    const titleImage = renderTitleImage(title);
+    if (titleImage) {
+      doc.addImage(titleImage.dataUrl, 'PNG', MARGIN, 9.6, titleImage.widthMm, titleImage.heightMm);
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text(title, MARGIN, 14);
+    }
     doc.setFont('courier', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(107, 115, 105);
