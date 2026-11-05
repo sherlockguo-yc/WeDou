@@ -9,7 +9,7 @@ import StudioView from './views/StudioView';
 import type { Tool } from './views/StudioView';
 import { ConfirmModal, Toast } from './components/ui';
 import { recommendGridSize } from './core/boards';
-import { quantizeGrid, sampleGrid } from './core/convert';
+import { quantizeImage } from './core/convert';
 import { optimizeGrid } from './core/optimize';
 import { createPattern, parsePattern, serialize, touch } from './core/pattern';
 import { DEFAULT_PALETTE_ID, getPalette } from './core/palettes';
@@ -165,8 +165,7 @@ export default function App() {
       try {
         const w = params.width;
         const h = params.height;
-        const samples = sampleGrid(source, w, h, params);
-        const quantized = quantizeGrid(samples, w, h, paletteId, params);
+        const quantized = quantizeImage(source, w, h, paletteId, params);
         const optimized = optimizeGrid(quantized.cells, w, h, paletteId, params);
         const previous = patternRef.current;
         const baseName = nameRef.current.replace(/\.[^.]+$/, '') || '未命名图纸';

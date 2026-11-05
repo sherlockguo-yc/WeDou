@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { nearestColor, rgbToLab } from '../src/core/color';
-import { quantizeGrid, sampleGrid } from '../src/core/convert';
+import { bucketCenter, bucketKey, quantizeGrid, quantizeImage, sampleGrid } from '../src/core/convert';
 import { limitColors, removeIsolated } from '../src/core/optimize';
 import { createPattern } from '../src/core/pattern';
 import { getLabCache, getPalette } from '../src/core/palettes';
 import { usageRows, patternStats } from '../src/core/stats';
 import type { ImageLike } from '../src/core/convert';
+import type { Rgb } from '../src/core/types';
 
 function solidImage(width: number, height: number, rgba: [number, number, number, number]): ImageLike {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -107,5 +108,149 @@ describe('usage and stats', () => {
     expect(stats.emptyCells).toBe(2);
     expect(stats.colorCount).toBe(2);
     expect(stats.boards).toBe(1);
+  });
+});
+
+function paintedImage(
+  width: number,
+  height: number,
+  fill: (x: number, y: number) => [number, number, number, number],
+): ImageLike {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) data.set(fill(x, y), (y * width + x) * 4);
+  }
+  return { data, width, height };
+}
+
+/** Invariants that must hold no matter how a cell's representative colour is chosen. */
+describe('cell sampling contract', () => {
+  const paletteId = 'mard-291';
+  const valid = () => new Set(getPalette(paletteId).colors.map((color) => color.code));
+  const params = (dithering: boolean) => ({ dithering, ...noBackground });
+
+  it('splits the image into cells without overlap or gaps', () => {
+    const image = paintedImage(4, 4, (x) => (x < 2 ? [220, 30, 30, 255] : [30, 30, 220, 255]));
+    const samples = sampleGrid(image, 2, 2, noBackground);
+    expect(samples).toHaveLength(4);
+    expect(samples[0]?.r).toBeGreaterThan(200);
+    expect(samples[1]?.b).toBeGreaterThan(200);
+    expect(samples[2]?.r).toBeGreaterThan(200);
+    expect(samples[3]?.b).toBeGreaterThan(200);
+  });
+
+  it('maps a solid cell to the nearest code of the selected palette', () => {
+    // 220/28/28 sits exactly at a bucket centre, so both paths see the same colour.
+    const rgb = { r: 220, g: 28, b: 28 };
+    const palette = getPalette(paletteId);
+    const expected = nearestColor(rgbToLab(rgb), palette.colors, getLabCache(paletteId))?.color.code;
+    expect(expected).toBeTruthy();
+    const image = solidImage(4, 4, [220, 28, 28, 255]);
+    const plain = quantizeImage(image, 2, 2, paletteId, params(false));
+    expect(plain.cells.every((code) => code === expected)).toBe(true);
+    // Dithering deliberately diffuses error into neighbouring cells, so a flat
+    // image is not expected to stay flat; only palette membership is contractual.
+    const dither = quantizeImage(image, 2, 2, paletteId, params(true));
+    expect(dither.cells.every((code) => !code || valid().has(code))).toBe(true);
+  });
+
+  it('never emits a code outside the selected palette, with or without dithering', () => {
+    const image = paintedImage(4, 4, (x, y) =>
+      x + y < 3 ? [220, 30, 30, 255] : [30, 30, 220, 255],
+    );
+    for (const dithering of [false, true]) {
+      const { cells } = quantizeImage(image, 2, 2, paletteId, params(dithering));
+      expect(cells).toHaveLength(4);
+      expect(cells.every((code) => !code || valid().has(code))).toBe(true);
+    }
+  });
+
+  it('agrees on empty cells with and without dithering', () => {
+    const image = paintedImage(4, 4, (x) => (x < 2 ? [220, 30, 30, 0] : [30, 30, 220, 255]));
+    const plain = quantizeImage(image, 2, 2, paletteId, params(false));
+    const dither = quantizeImage(image, 2, 2, paletteId, params(true));
+    expect(plain.cells.filter((code) => code === null)).toHaveLength(2);
+    expect(plain.cells.map((code) => code === null)).toEqual(dither.cells.map((code) => code === null));
+  });
+});
+
+describe('voting by bead code', () => {
+  const paletteId = 'mard-291';
+  const colors = getPalette(paletteId).colors;
+  const cache = getLabCache(paletteId);
+  const codeOf = (rgb: Rgb) =>
+    nearestColor(rgbToLab(bucketCenter(bucketKey(rgb.r, rgb.g, rgb.b))), colors, cache)?.color.code;
+
+  it('merges votes from near-identical colours split across bucket boundaries', () => {
+    let pair: { a: Rgb; b: Rgb; contrast: Rgb; shared: string } | null = null;
+    for (let r = 8; r < 248 && !pair; r += 8) {
+      const a: Rgb = { r: r - 1, g: 100, b: 100 };
+      const b: Rgb = { r, g: 100, b: 100 };
+      if (bucketKey(a.r, a.g, a.b) === bucketKey(b.r, b.g, b.b)) continue;
+      const shared = codeOf(a);
+      if (!shared || shared !== codeOf(b)) continue;
+      for (const contrast of [
+        { r: 20, g: 20, b: 220 }, { r: 20, g: 220, b: 20 },
+        { r: 240, g: 240, b: 240 }, { r: 20, g: 20, b: 20 },
+      ]) {
+        if (codeOf(contrast) !== shared) {
+          pair = { a, b, contrast, shared };
+          break;
+        }
+      }
+    }
+    expect(pair).not.toBeNull();
+    const found = pair as { a: Rgb; b: Rgb; contrast: Rgb; shared: string };
+    const image = paintedImage(6, 6, (x, y) => {
+      const index = y * 6 + x;
+      const rgb = index < 10 ? found.a : index < 20 ? found.b : found.contrast;
+      return [rgb.r, rgb.g, rgb.b, 255] as [number, number, number, number];
+    });
+    const { cells } = quantizeImage(image, 1, 1, paletteId, { dithering: false, ...noBackground });
+    expect(cells).toEqual([found.shared]);
+  });
+
+  it('never invents a code from an averaged mix of two colours', () => {
+    const candidates: Rgb[] = [
+      { r: 220, g: 30, b: 30 }, { r: 30, g: 30, b: 220 }, { r: 30, g: 220, b: 30 },
+      { r: 240, g: 240, b: 240 }, { r: 20, g: 20, b: 20 }, { r: 240, g: 200, b: 40 },
+      { r: 120, g: 60, b: 180 }, { r: 60, g: 180, b: 120 },
+    ];
+    const mix = candidates
+      .flatMap((a) => candidates.map((b) => ({ a, b })))
+      .find(({ a, b }) => {
+        const ca = codeOf(a);
+        const cb = codeOf(b);
+        if (!ca || !cb || ca === cb) return false;
+        const avg = {
+          r: Math.round((a.r + b.r) / 2),
+          g: Math.round((a.g + b.g) / 2),
+          b: Math.round((a.b + b.b) / 2),
+        };
+        const cm = codeOf(avg);
+        return Boolean(cm && cm !== ca && cm !== cb);
+      });
+    expect(mix).toBeTruthy();
+    const found = mix as { a: Rgb; b: Rgb };
+    const image = paintedImage(6, 6, (_x, y) => {
+      const rgb = y < 3 ? found.a : found.b;
+      return [rgb.r, rgb.g, rgb.b, 255] as [number, number, number, number];
+    });
+    const allowed = [codeOf(found.a), codeOf(found.b)];
+    const { cells } = quantizeImage(image, 1, 1, paletteId, { dithering: false, ...noBackground });
+    expect(allowed).toContain(cells[0]);
+  });
+
+  it('gives identical results when the shared bucket cache is warm', () => {
+    const image = paintedImage(6, 6, (x, y) =>
+      (x + y) % 3 === 0 ? [220, 30, 30, 255] : [30, 30, 220, 255],
+    );
+    const options = { dithering: false, ...noBackground };
+    const first = quantizeImage(image, 3, 3, paletteId, options).cells;
+    const second = quantizeImage(image, 3, 3, paletteId, options).cells;
+    quantizeImage(image, 3, 3, 'perler-117', options);
+    const back = quantizeImage(image, 3, 3, paletteId, options).cells;
+    expect(second).toEqual(first);
+    expect(back).toEqual(first);
   });
 });
