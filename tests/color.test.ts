@@ -42,8 +42,8 @@ describe('palette matching', () => {
     }
   });
 
-  it('defaults to the MARD 291 full kit', () => {
-    expect(DEFAULT_PALETTE_ID).toBe('mard-291');
+  it('defaults to the MARD 221 kit', () => {
+    expect(DEFAULT_PALETTE_ID).toBe('mard-221');
   });
 
   it('reports codes that share one HEX', () => {

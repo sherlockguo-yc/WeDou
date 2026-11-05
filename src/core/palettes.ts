@@ -10,9 +10,9 @@ export const PALETTE_SOURCE = data.source;
 export const PALETTE_FETCHED_AT = data.fetchedAt;
 export const PALETTE_NOTE = data.note;
 
-/** MARD 291 is the most common full retail kit in the Chinese bead community. */
+/** New charts start with the MARD 221 kit; every other palette stays selectable. */
 export const DEFAULT_PALETTE_ID =
-  PALETTES.find((palette) => palette.id === 'mard-291')?.id ?? PALETTES[0].id;
+  PALETTES.find((palette) => palette.id === 'mard-221')?.id ?? PALETTES[0].id;
 
 /** Codes sharing one HEX: buying both means buying the same colour twice. */
 export function duplicateCodes(paletteId: string): Map<string, string[]> {
