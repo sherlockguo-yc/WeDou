@@ -129,6 +129,14 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [cloud, setCloud] = useState<Pattern[]>([]);
   const [drafts, setDrafts] = useState<Pattern[]>(readDrafts);
+  const [highlightCode, setHighlightCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (highlightCode && (!pattern || !pattern.cells.includes(highlightCode))) {
+      setHighlightCode(null);
+    }
+  }, [pattern, highlightCode]);
+
   const requestRef = useRef(0);
   const patternRef = useRef<Pattern | null>(null);
   const nameRef = useRef('');
@@ -693,6 +701,8 @@ export default function App() {
             canRedo={history.future.length > 0}
             tool={tool}
             activeCode={activeCode}
+            highlightCode={highlightCode}
+            onHighlightCode={setHighlightCode}
             onFile={(file) => void loadFile(file)}
             onParam={(patch) => changeConfig({ params: patch })}
             onPalette={(id) => changeConfig({ paletteId: id })}
@@ -716,6 +726,8 @@ export default function App() {
         {view === 'guide' && pattern ? (
           <GuideView
             pattern={pattern}
+            highlightCode={highlightCode}
+            onHighlightCode={setHighlightCode}
             onToggleCell={toggleProgress}
             onBack={() => setView('studio')}
             onSave={() => void saveCurrent()}

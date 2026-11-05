@@ -2,15 +2,20 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, EyeOff, Save } from 'lucide-react';
 import ChartViewport from '../components/ChartViewport';
 import { Notice, Toggle } from '../components/ui';
+import { usageRows } from '../core/stats';
 import type { Pattern } from '../core/types';
 
 export default function GuideView({
   pattern,
+  highlightCode,
+  onHighlightCode,
   onToggleCell,
   onBack,
   onSave,
 }: {
   pattern: Pattern;
+  highlightCode: string | null;
+  onHighlightCode: (code: string | null) => void;
   onToggleCell: (index: number) => void;
   onBack: () => void;
   onSave: () => void;
@@ -21,6 +26,14 @@ export default function GuideView({
   const done = pattern.progress.filter((value, index) => value && pattern.cells[index] !== null).length;
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
   const highlightRows = useMemo(() => new Set([row]), [row]);
+  const rows = useMemo(() => usageRows(pattern), [pattern]);
+  const remaining = useMemo(() => {
+    const counts = new Map<string, number>();
+    pattern.cells.forEach((code, index) => {
+      if (code && !pattern.progress[index]) counts.set(code, (counts.get(code) ?? 0) + 1);
+    });
+    return counts;
+  }, [pattern]);
 
   return (
     <div className="guide">
@@ -52,6 +65,33 @@ export default function GuideView({
             />
           </div>
         </div>
+        <div className="tool-row">
+          <div className="color-picker-block">
+            <span className="eyebrow">按色号高亮 · 一种一种颜色拼</span>
+            <div className="color-chip-row">
+              <button
+                className={`btn small${highlightCode === null ? ' primary' : ' ghost'}`}
+                onClick={() => onHighlightCode(null)}
+              >
+                全部颜色
+              </button>
+              {rows.map((item) => (
+                <button
+                  type="button"
+                  className={`color-option${highlightCode === item.code ? ' selected' : ''}`}
+                  key={item.code}
+                  aria-pressed={highlightCode === item.code}
+                  title={`${item.name} · 共 ${item.count} 颗`}
+                  onClick={() => onHighlightCode(highlightCode === item.code ? null : item.code)}
+                >
+                  <span className="color-swatch" style={{ background: item.hex }} />
+                  <span>{item.code}</span>
+                  <span className="chip-remain">剩 {remaining.get(item.code) ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <ChartViewport
           pattern={pattern}
           interactive
@@ -59,9 +99,10 @@ export default function GuideView({
           progress={pattern.progress}
           highlightRows={highlightRows}
           completedOnly={hideCompleted}
+          highlightCode={highlightCode}
         />
         <div className="tool-row">
-          <Notice>点击格子标记完成/取消；进度随图纸一起保存在本地，登录后会同步到云端。</Notice>
+          <Notice>点击格子标记完成/取消；选一个色号可只看这一种颜色，拼完再换下一个。进度随图纸一起保存在本地，登录后会同步到云端。</Notice>
         </div>
         <div className="tool-row">
           <span className="eyebrow"><Check size={12} /> 深色覆盖 = 已完成</span>

@@ -18,6 +18,7 @@ export interface ChartViewportProps {
   progress?: boolean[];
   highlightRows?: Set<number>;
   completedOnly?: boolean;
+  highlightCode?: string | null;
   interactive?: boolean;
 }
 
@@ -28,6 +29,7 @@ export default function ChartViewport({
   progress,
   highlightRows,
   completedOnly,
+  highlightCode,
   interactive,
 }: ChartViewportProps) {
   const [cell, setCell] = useState(() => defaultCell(pattern.w));
@@ -88,6 +90,7 @@ export default function ChartViewport({
           progress={progress}
           highlightRows={highlightRows}
           completedOnly={completedOnly}
+          highlightCode={highlightCode}
         />
       </div>
     </div>

@@ -13,11 +13,32 @@ export interface GridOptions {
   highlightRows?: Set<number>;
   progress?: boolean[];
   completedOnly?: boolean;
+  /** Preview-only: when set, only beads of this code keep their colour and label. */
+  highlightCode?: string | null;
 }
 
 const LABEL_SPACE = 22;
 const MAJOR_INK = '#223B32';
 const MINOR_INK = 'rgba(34, 59, 50, 0.55)';
+const PAPER: [number, number, number] = [0xf7, 0xf3, 0xe8];
+/** A dimmed bead keeps 12% of its colour: enough tint to stay locatable, no visual competition. */
+const DIM_MIX = 0.88;
+
+/** Empty cells are never dimmed; the selected bead is never dimmed. */
+export function isDimmed(code: string | null, highlightCode?: string | null): boolean {
+  return Boolean(highlightCode) && Boolean(code) && code !== highlightCode;
+}
+
+/** Blend a bead colour toward paper instead of covering it with an overlay. */
+export function dimmedFill(hex: string): string {
+  const raw = hex.replace('#', '');
+  const expanded = raw.length === 3 ? raw.split('').map((ch) => ch + ch).join('') : raw;
+  const value = Number.parseInt(expanded, 16);
+  if (!Number.isFinite(value)) return `rgb(${PAPER.join(', ')})`;
+  const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  const mixed = channels.map((channel, index) => Math.round(channel * (1 - DIM_MIX) + PAPER[index] * DIM_MIX));
+  return `rgb(${mixed.join(', ')})`;
+}
 
 export function gridCanvasSize(pattern: Pattern, cell: number): { width: number; height: number } {
   const offset = LABEL_SPACE;
@@ -36,7 +57,12 @@ function readableInk(hex: string): string {
 }
 
 /** Cell fills and empty-cell dots only; separators are drawn in one pass below. */
-function drawCells(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number): void {
+function drawCells(
+  ctx: CanvasRenderingContext2D,
+  pattern: Pattern,
+  cell: number,
+  highlightCode?: string | null,
+): void {
   for (let r = 0; r < pattern.h; r += 1) {
     for (let c = 0; c < pattern.w; c += 1) {
       const code = pattern.cells[r * pattern.w + c];
@@ -44,7 +70,7 @@ function drawCells(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number
       const y = LABEL_SPACE + r * cell;
       const hex = hexOf(pattern.paletteId, code);
       if (hex) {
-        ctx.fillStyle = hex;
+        ctx.fillStyle = isDimmed(code, highlightCode) ? dimmedFill(hex) : hex;
         ctx.fillRect(x, y, cell, cell);
       } else {
         ctx.fillStyle = '#EDE8DC';
@@ -100,7 +126,7 @@ function drawLabels(
       const code = pattern.cells[index];
       const x = LABEL_SPACE + c * cell;
       const y = LABEL_SPACE + r * cell;
-      if (options.showCodes && cell >= MIN_CODE_CELL && code) {
+      if (options.showCodes && cell >= MIN_CODE_CELL && code && !isDimmed(code, options.highlightCode)) {
         const hex = hexOf(pattern.paletteId, code) ?? '#EDE8DC';
         ctx.fillStyle = readableInk(hex);
         let fontSize = Math.max(9, Math.floor(cell * 0.5));
@@ -112,7 +138,7 @@ function drawLabels(
         }
         ctx.fillText(code, x + cell / 2, y + cell / 2);
       }
-      if (options.progress?.[index]) {
+      if (options.progress?.[index] && !isDimmed(code, options.highlightCode)) {
         ctx.fillStyle = 'rgba(34, 59, 50, 0.55)';
         ctx.fillRect(x, y, cell, cell);
       }
@@ -173,7 +199,7 @@ export function drawGrid(
     }
   }
 
-  drawCells(ctx, pattern, cell);
+  drawCells(ctx, pattern, cell, options.highlightCode);
   drawMinorGrid(ctx, pattern, cell);
   drawLabels(ctx, pattern, options);
   drawBlockLines(ctx, pattern, cell);

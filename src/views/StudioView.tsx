@@ -49,6 +49,8 @@ export interface StudioProps {
   canRedo: boolean;
   tool: Tool;
   activeCode: string;
+  highlightCode: string | null;
+  onHighlightCode: (code: string | null) => void;
   onFile: (file: File) => void;
   onParam: (patch: Partial<ConvertParams>) => void;
   onPalette: (id: string) => void;
@@ -326,7 +328,7 @@ export default function StudioView(props: StudioProps) {
                   </Notice>
                 </div>
               ) : null}
-              <ChartViewport pattern={props.pattern} interactive onCell={props.onPaint} />
+              <ChartViewport pattern={props.pattern} interactive onCell={props.onPaint} highlightCode={props.highlightCode} />
               <div className="tool-row">
                 <button className={`btn small${props.tool === 'brush' ? ' primary' : ''}`} onClick={() => props.onTool('brush')} title="刷色"><Brush size={14} /> 刷色</button>
                 <button className={`btn small${props.tool === 'eraser' ? ' primary' : ''}`} onClick={() => props.onTool('eraser')} title="橡皮（留空）"><Eraser size={14} /> 留空</button>
@@ -344,9 +346,13 @@ export default function StudioView(props: StudioProps) {
             <section className="panel">
               <div className="panel-head">
                 <h2>备豆清单</h2>
-                <span className="eyebrow">按颗数从多到少</span>
+                <span className="eyebrow">按颗数从多到少 · 点色号只看这一种颜色</span>
               </div>
-              <UsageTable pattern={props.pattern} />
+              <UsageTable
+                pattern={props.pattern}
+                selectedCode={props.highlightCode}
+                onSelect={props.onHighlightCode}
+              />
               <EquivalentPanel paletteId={props.paletteId} code={props.activeCode} />
               <div className="tool-row">
                 <button className="btn primary" onClick={props.onExportPdf} disabled={busy}><FileText size={15} /> A4 分板 PDF</button>

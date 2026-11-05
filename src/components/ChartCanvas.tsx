@@ -10,6 +10,7 @@ export interface ChartCanvasProps {
   progress?: boolean[];
   highlightRows?: Set<number>;
   completedOnly?: boolean;
+  highlightCode?: string | null;
   interactive?: boolean;
 }
 
@@ -20,6 +21,7 @@ export default function ChartCanvas({
   progress,
   highlightRows,
   completedOnly,
+  highlightCode,
   interactive,
 }: ChartCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,8 +38,9 @@ export default function ChartCanvas({
       progress,
       highlightRows,
       completedOnly,
+      highlightCode,
     });
-  }, [pattern, cell, progress, highlightRows, completedOnly]);
+  }, [pattern, cell, progress, highlightRows, completedOnly, highlightCode]);
 
   const handle = (event: PointerEvent<HTMLCanvasElement>, started: boolean) => {
     if (!onCell || !interactive) return;
