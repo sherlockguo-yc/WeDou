@@ -6,11 +6,10 @@
 
 ## 在线访问
 
-**https://sherlockguo-yc.github.io/WeDou/**
+- **完整版（推荐）**：https://wedou.sherlockguo.com/ —— N150 常驻 Node 服务，账号注册/登录、云端图纸同步、拼装进度跨设备全部可用
+- **静态镜像**：https://sherlockguo-yc.github.io/WeDou/ —— GitHub Pages 纯前端，转换/编辑/导出功能相同，但没有后端，页面显示「本地模式」，换设备请用「工程文件」导出再导入
 
-公开静态版包含完整的图片转图纸、手工编辑、A4 分板 PDF / 高清 PNG 导出、拼装引导与本地草稿。GitHub Pages 没有 Node 后端，因此账号云同步不可用，页面会显示「本地模式」；换设备可用「工程文件」导出再导入。
-
-需要完整账号同步时，请按下方方式本地运行 Express，或把服务部署到能跑 Node 的环境。
+两者都由 push 到 `master` 自动部署：静态版走 `deploy.yml`（Pages），完整版走 `deploy-n150.yml`（GitHub Release → webhook → N150 deploy-agent）。**完整版不需要任何 R2 Secrets**：N150 实测直连 GitHub 为 200 / 0.6s，Release 兜底即可。
 
 ## 快速开始
 
@@ -72,7 +71,8 @@ docs/           需求文档（冻结）、功能规格（活文档）、实现�
 
 ## 约束与边界
 
-- GitHub Pages 静态版由 `.github/workflows/deploy.yml` 自动构建部署（`VITE_STATIC_MODE=1`、`--base /WeDou/`）；完整 Node 服务（`npm start`）需自行部署，不在本次范围。
+- 完整版部署在 N150（端口 3002，`~/wedou`），产物不含 `node_modules`，由 `scripts/restart-n150.sh` 现场安装到 `~/wedou-deps` 并软链接回来；该脚本用 `flock` 串行化且后台进程带 `9>&-`，避免死锁阻塞全局部署队列。
+- 静态版由 `.github/workflows/deploy.yml` 构建（`VITE_STATIC_MODE=1`、`--base /WeDou/`）。
 - 不含第三方登录、付费与社区图纸库。
 - 账号数据落在 `server/data/`（已 gitignore），仅适用于本地/单机运行。
 - AI 去背景首次使用需从 CDN 下载约 40MB 模型；无网络或设备不支持时会提示并回退到手动擦除，不影响主链路。
