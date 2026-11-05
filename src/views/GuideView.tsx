@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, EyeOff, Save } from 'lucide-react';
-import ChartCanvas from '../components/ChartCanvas';
+import ChartViewport from '../components/ChartViewport';
 import { Notice, Toggle } from '../components/ui';
 import type { Pattern } from '../core/types';
 
@@ -52,17 +52,14 @@ export default function GuideView({
             />
           </div>
         </div>
-        <div className="canvas-scroll">
-          <ChartCanvas
-            pattern={pattern}
-            cell={pattern.w > 60 ? 10 : pattern.w > 40 ? 14 : 20}
-            interactive
-            onCell={onToggleCell}
-            progress={pattern.progress}
-            highlightRows={highlightRows}
-            completedOnly={hideCompleted}
-          />
-        </div>
+        <ChartViewport
+          pattern={pattern}
+          interactive
+          onCell={onToggleCell}
+          progress={pattern.progress}
+          highlightRows={highlightRows}
+          completedOnly={hideCompleted}
+        />
         <div className="tool-row">
           <Notice>点击格子标记完成/取消；进度随图纸一起保存在本地，登录后会同步到云端。</Notice>
         </div>

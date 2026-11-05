@@ -17,7 +17,7 @@ import {
   Upload,
   Wand2,
 } from 'lucide-react';
-import ChartCanvas from '../components/ChartCanvas';
+import ChartViewport from '../components/ChartViewport';
 import EquivalentPanel from '../components/EquivalentPanel';
 import UsageTable from '../components/UsageTable';
 import { ColorSearch, Notice, Toggle } from '../components/ui';
@@ -38,6 +38,7 @@ export interface StudioProps {
   paletteId: string;
   beadSize: BeadSize;
   segment: SegmentProgress | null;
+  segmentApplied: boolean;
   canUndo: boolean;
   canRedo: boolean;
   tool: Tool;
@@ -48,6 +49,7 @@ export interface StudioProps {
   onBeadSize: (size: BeadSize) => void;
   onRegenerate: () => void;
   onSegment: () => void;
+  onRevertSegment: () => void;
   onTool: (tool: Tool) => void;
   onActiveCode: (code: string) => void;
   onPaint: (index: number) => void;
@@ -122,6 +124,15 @@ export default function StudioView(props: StudioProps) {
               <span className="thumb-name">{props.sourceName}</span>
               <button className="btn small ghost" onClick={props.onSegment} disabled={busy} title="浏览器内 AI 去背景">
                 <Wand2 size={14} /> 智能去背景
+              </button>
+            </div>
+          ) : null}
+
+          {props.segmentApplied ? (
+            <div className="segment-state">
+              <span className="eyebrow"><Wand2 size={12} /> 已应用智能去背景</span>
+              <button className="btn small" onClick={props.onRevertSegment} disabled={busy} title="丢弃抠图效果，恢复上传时的原图">
+                <RotateCcw size={14} /> 恢复原图
               </button>
             </div>
           ) : null}
@@ -252,14 +263,7 @@ export default function StudioView(props: StudioProps) {
                 </div>
                 <span className="eyebrow">{props.status === 'loading' ? '转换中…' : props.status === 'exporting' ? '导出中…' : '实时预览'}</span>
               </div>
-              <div className="canvas-scroll">
-                <ChartCanvas
-                  pattern={props.pattern}
-                  cell={props.pattern.w > 60 ? 10 : props.pattern.w > 40 ? 14 : 20}
-                  interactive
-                  onCell={props.onPaint}
-                />
-              </div>
+              <ChartViewport pattern={props.pattern} interactive onCell={props.onPaint} />
               <div className="tool-row">
                 <button className={`btn small${props.tool === 'brush' ? ' primary' : ''}`} onClick={() => props.onTool('brush')} title="刷色"><Brush size={14} /> 刷色</button>
                 <button className={`btn small${props.tool === 'eraser' ? ' primary' : ''}`} onClick={() => props.onTool('eraser')} title="橡皮（留空）"><Eraser size={14} /> 留空</button>

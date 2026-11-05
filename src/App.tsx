@@ -84,6 +84,8 @@ export default function App() {
   const [status, setStatus] = useState<Status>('empty');
   const [source, setSource] = useState<ImageData | null>(null);
   const [sourceBlob, setSourceBlob] = useState<Blob | null>(null);
+  const [originalSource, setOriginalSource] = useState<ImageData | null>(null);
+  const [segmentApplied, setSegmentApplied] = useState(false);
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourceName, setSourceName] = useState('');
   const [pattern, setPattern] = useState<Pattern | null>(null);
@@ -209,6 +211,8 @@ export default function App() {
       objectUrlRef.current = url;
 
       setSource(imageData);
+      setOriginalSource(imageData);
+      setSegmentApplied(false);
       setSourceBlob(file);
       setSourceUrl(url);
       setSourceName(file.name);
@@ -304,13 +308,46 @@ export default function App() {
     setSegment({ phase: 'loading', ratio: 0.02, message: '准备中…' });
     try {
       const imageData = await removeBackground(sourceBlob, setSegment);
+      if (!segmentApplied && source) {
+        setOriginalSource(
+          new ImageData(new Uint8ClampedArray(source.data), source.width, source.height),
+        );
+      }
       setSource(imageData);
-      notify('去背景完成，透明区域已设为不放豆');
+      setSegmentApplied(true);
+      notify('去背景完成，透明区域已设为不放豆。效果不理想可点「恢复原图」回退');
     } catch (error) {
       notify(error instanceof Error ? error.message : '智能去背景失败，可用橡皮手动擦除', 'error');
     } finally {
       setSegment(null);
     }
+  };
+
+  const revertSegment = () => {
+    if (!originalSource) {
+      notify('没有可恢复的原图', 'error');
+      return;
+    }
+    const apply = () => {
+      setDirty(false);
+      setHistory({ past: [], future: [] });
+      setSource(
+        new ImageData(
+          new Uint8ClampedArray(originalSource.data),
+          originalSource.width,
+          originalSource.height,
+        ),
+      );
+      setSegmentApplied(false);
+      setConfirm(null);
+      notify('已恢复去背景前的原图，图纸重新生成');
+    };
+    if (dirty) {
+      setConfirm({
+        message: '恢复原图会重新生成图纸，手工修改将被覆盖，要继续吗？',
+        onConfirm: apply,
+      });
+    } else apply();
   };
 
   /* ---------- manual editing ---------- */
@@ -440,6 +477,8 @@ export default function App() {
   const openPattern = (target: Pattern) => {
     setSource(null);
     setSourceBlob(null);
+    setOriginalSource(null);
+    setSegmentApplied(false);
     setPattern(target);
     setParams(target.params);
     setPaletteId(target.paletteId);
@@ -564,6 +603,7 @@ export default function App() {
             paletteId={paletteId}
             beadSize={beadSize}
             segment={segment}
+            segmentApplied={segmentApplied}
             canUndo={history.past.length > 0}
             canRedo={history.future.length > 0}
             tool={tool}
@@ -574,6 +614,7 @@ export default function App() {
             onBeadSize={(size) => changeConfig({ beadSize: size })}
             onRegenerate={regenerate}
             onSegment={() => void doSegment()}
+            onRevertSegment={revertSegment}
             onTool={setTool}
             onActiveCode={setActiveCode}
             onPaint={paintCell}
