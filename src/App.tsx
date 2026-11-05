@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Grid2X2, LayoutGrid, LogIn, LogOut, Package, Wrench } from 'lucide-react';
+import { Grid2X2, HardDrive, LayoutGrid, LogIn, LogOut, Package, Wrench } from 'lucide-react';
 import { api } from './api/client';
 import type { User } from './api/client';
 import AuthModal from './views/AuthModal';
@@ -28,6 +28,9 @@ type History = { past: Pattern[]; future: Pattern[] };
 const DRAFTS_KEY = 'wedou.drafts';
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_DIMENSION = 4000;
+
+/** GitHub Pages builds have no Express backend; every feature still works locally. */
+const STATIC_MODE = import.meta.env.VITE_STATIC_MODE === '1';
 
 function readDrafts(): Pattern[] {
   try {
@@ -117,8 +120,13 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const [backendAvailable, setBackendAvailable] = useState(!STATIC_MODE);
+
   useEffect(() => {
-    api.me().then((result) => setUser(result.user)).catch(() => setUser(null));
+    if (STATIC_MODE) return;
+    api.me()
+      .then((result) => { setBackendAvailable(true); setUser(result.user); })
+      .catch(() => { setBackendAvailable(false); setUser(null); });
   }, []);
 
   const refreshCloud = useCallback(async () => {
@@ -536,8 +544,10 @@ export default function App() {
             <button className="btn small ghost" onClick={async () => { await api.logout().catch(() => undefined); setUser(null); notify('已退出登录'); }}>
               <LogOut size={14} /> 退出
             </button>
-          ) : (
+          ) : backendAvailable ? (
             <button className="btn small warm" onClick={() => setAuthOpen(true)}><LogIn size={14} /> 登录 / 注册</button>
+          ) : (
+            <span className="user-chip"><HardDrive size={12} /> 本地模式</span>
           )}
         </div>
       </header>
@@ -594,7 +604,7 @@ export default function App() {
             onDelete={(id) => void deletePattern(id)}
             onDuplicate={(id) => void duplicatePattern(id)}
             onImport={(file) => void importProject(file)}
-            onLogin={() => setAuthOpen(true)}
+            onLogin={backendAvailable ? () => setAuthOpen(true) : undefined}
           />
         ) : null}
       </main>

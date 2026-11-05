@@ -20,7 +20,7 @@ export default function LibraryView({
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onImport: (file: File) => void;
-  onLogin: () => void;
+  onLogin?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   return (
@@ -44,13 +44,17 @@ export default function LibraryView({
                 event.target.value = '';
               }}
             />
-            {!user ? <button className="btn small primary" onClick={onLogin}><LogIn size={14} /> 登录同步</button> : null}
+            {!user && onLogin ? <button className="btn small primary" onClick={onLogin}><LogIn size={14} /> 登录同步</button> : null}
           </div>
         </div>
 
         {!user ? (
           <div style={{ marginBottom: 'var(--s3)' }}>
-            <Notice>当前是本地草稿，刷新后仍在但换设备看不到。登录后会把草稿同步到账号。</Notice>
+            <Notice>
+              {onLogin
+                ? '当前是本地草稿，刷新后仍在但换设备看不到。登录后会把草稿同步到账号。'
+                : '当前为本地模式：图纸保存在此浏览器，刷新后仍在。换设备请用「工程文件」导出再导入。'}
+            </Notice>
           </div>
         ) : null}
 
