@@ -31,7 +31,7 @@ export default function ChartCanvas({
     if (!canvas || !ctx) return;
     drawGrid(ctx, pattern, {
       cell,
-      showSymbols: true,
+      showCodes: true,
       showCoordinates: true,
       progress,
       highlightRows,

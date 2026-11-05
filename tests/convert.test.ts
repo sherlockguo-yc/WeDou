@@ -97,7 +97,7 @@ describe('usage and stats', () => {
     const pattern = createPattern({ w: 2, h: 2, cells: ['A1', 'A1', 'A2', null] });
     const rows = usageRows(pattern);
     expect(rows.map((row) => row.count)).toEqual([2, 1]);
-    expect(rows[0].symbol).not.toBe(rows[1].symbol);
+    expect(rows[0].code).not.toBe(rows[1].code);
     expect(rows.reduce((sum, row) => sum + row.ratio, 0)).toBeCloseTo(1, 6);
   });
 

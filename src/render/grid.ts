@@ -1,10 +1,14 @@
 import { hexOf } from '../core/palettes';
-import { symbolsFor } from '../core/stats';
 import type { Pattern } from '../core/types';
+
+/** Major lines every N cells so a chart can be counted and located by hand. */
+export const GRID_BLOCK = 5;
+/** Below this cell size a full colour code no longer fits legibly. */
+export const MIN_CODE_CELL = 20;
 
 export interface GridOptions {
   cell: number;
-  showSymbols: boolean;
+  showCodes: boolean;
   showCoordinates: boolean;
   highlightRows?: Set<number>;
   progress?: boolean[];
@@ -29,6 +33,28 @@ function readableInk(hex: string): string {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#223b32' : '#F7F3E8';
 }
 
+/** Draw on top of the cells: one stronger line every GRID_BLOCK cells. */
+function drawBlockLines(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number): void {
+  const width = pattern.w * cell;
+  const height = pattern.h * cell;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(34, 59, 50, 0.72)';
+  ctx.lineWidth = Math.max(1.4, cell * 0.075);
+  ctx.beginPath();
+  for (let c = 0; c <= pattern.w; c += GRID_BLOCK) {
+    const x = LABEL_SPACE + c * cell + 0.5;
+    ctx.moveTo(x, LABEL_SPACE);
+    ctx.lineTo(x, LABEL_SPACE + height);
+  }
+  for (let r = 0; r <= pattern.h; r += GRID_BLOCK) {
+    const y = LABEL_SPACE + r * cell + 0.5;
+    ctx.moveTo(LABEL_SPACE, y);
+    ctx.lineTo(LABEL_SPACE + width, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Draws the bead chart. Canvas font must be a valid CSS shorthand (no var/calc). */
 export function drawGrid(
   ctx: CanvasRenderingContext2D,
@@ -44,9 +70,7 @@ export function drawGrid(
   ctx.fillStyle = '#F7F3E8';
   ctx.fillRect(0, 0, size.width, size.height);
 
-  const symbols = symbolsFor(pattern.cells);
   const labelFont = `${Math.max(9, Math.min(12, Math.floor(cell * 0.42)))}px ui-monospace, monospace`;
-  const symbolFont = `600 ${Math.max(9, Math.floor(cell * 0.46))}px ui-monospace, monospace`;
 
   if (options.showCoordinates) {
     ctx.fillStyle = '#6B7369';
@@ -54,15 +78,17 @@ export function drawGrid(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (let c = 0; c < pattern.w; c += 1) {
-      if (c % 5 !== 0 && c !== pattern.w - 1) continue;
+      if ((c + 1) % GRID_BLOCK !== 0 && c !== pattern.w - 1) continue;
       ctx.fillText(String(c + 1), LABEL_SPACE + c * cell + cell / 2, LABEL_SPACE / 2);
     }
     for (let r = 0; r < pattern.h; r += 1) {
-      if (r % 5 !== 0 && r !== pattern.h - 1) continue;
+      if ((r + 1) % GRID_BLOCK !== 0 && r !== pattern.h - 1) continue;
       ctx.fillText(String(r + 1), LABEL_SPACE / 2, LABEL_SPACE + r * cell + cell / 2);
     }
   }
 
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   for (let r = 0; r < pattern.h; r += 1) {
     for (let c = 0; c < pattern.w; c += 1) {
       const index = r * pattern.w + c;
@@ -83,12 +109,16 @@ export function drawGrid(
         ctx.fill();
       }
 
-      if (options.showSymbols && cell >= 14 && code) {
+      if (options.showCodes && cell >= MIN_CODE_CELL && code) {
         ctx.fillStyle = readableInk(hex ?? '#EDE8DC');
-        ctx.font = symbolFont;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(symbols.get(code) ?? '?', x + cell / 2, y + cell / 2);
+        let fontSize = Math.max(8, Math.floor(cell * 0.42));
+        ctx.font = `600 ${fontSize}px ui-monospace, monospace`;
+        const measured = ctx.measureText(code).width;
+        if (measured > cell * 0.88) {
+          fontSize = Math.max(7, Math.floor((fontSize * cell * 0.88) / measured));
+          ctx.font = `600 ${fontSize}px ui-monospace, monospace`;
+        }
+        ctx.fillText(code, x + cell / 2, y + cell / 2);
       }
 
       if (options.progress?.[index]) {
@@ -101,6 +131,8 @@ export function drawGrid(
       ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
     }
   }
+
+  drawBlockLines(ctx, pattern, cell);
 
   if (options.highlightRows?.size) {
     ctx.strokeStyle = '#D96B55';

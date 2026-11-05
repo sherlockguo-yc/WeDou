@@ -81,7 +81,6 @@ export interface UsageRow {
   code: string;
   name: string;
   hex: string;
-  symbol: string;
   count: number;
   ratio: number;
 }

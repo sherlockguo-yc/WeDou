@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { boardCount, boardLabel, finishedSize, recommendGridSize, splitBoards } from '../src/core/boards';
 import { createPattern, parsePattern, resolveConflict, serialize } from '../src/core/pattern';
-import { symbolAt } from '../src/core/symbols';
 
 describe('board splitting', () => {
   it('splits 30x30 into four boards with global coordinates', () => {
@@ -32,18 +31,6 @@ describe('board splitting', () => {
       expect(w * h).toBeGreaterThan(700);
       expect(w * h).toBeLessThan(1000);
     }
-  });
-});
-
-describe('symbols', () => {
-  it('avoids easily confused glyphs', () => {
-    const first = Array.from({ length: 30 }, (_, index) => symbolAt(index));
-    expect(new Set(first).size).toBe(30);
-    expect(first.some((symbol) => /[01OIB8]/.test(symbol))).toBe(false);
-  });
-
-  it('generates two-character symbols past the alphabet', () => {
-    expect(symbolAt(30)).toHaveLength(2);
   });
 });
 

@@ -9,7 +9,7 @@ export default function UsageTable({ pattern }: { pattern: Pattern }) {
         <span>色号 CODE</span>
         <span>参考色值 HEX</span>
         <span className="num">颗数</span>
-        <span className="num">符号</span>
+        <span className="num">占比</span>
       </div>
       {rows.map((row) => (
         <div className="table-row" key={row.code}>
@@ -19,7 +19,7 @@ export default function UsageTable({ pattern }: { pattern: Pattern }) {
           </span>
           <span className="table-cell"><span className="mono">{row.hex}</span></span>
           <span className="num mono">{row.count}</span>
-          <span className="num mono">{row.symbol}</span>
+          <span className="num mono">{`${(row.ratio * 100).toFixed(1)}%`}</span>
         </div>
       ))}
       {rows.length === 0 ? (

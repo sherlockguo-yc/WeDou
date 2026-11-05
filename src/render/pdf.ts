@@ -1,7 +1,8 @@
 import { boardLabel, splitBoards } from '../core/boards';
 import { getColor, getPalette } from '../core/palettes';
-import { patternStats, symbolsFor, usageRows } from '../core/stats';
+import { patternStats, usageRows } from '../core/stats';
 import type { Pattern } from '../core/types';
+import { GRID_BLOCK } from './grid';
 
 const PAGE_W = 210;
 const PAGE_H = 297;
@@ -55,7 +56,6 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const palette = getPalette(pattern.paletteId);
-  const symbols = symbolsFor(pattern.cells);
   const rows = usageRows(pattern);
   const stats = patternStats(pattern);
   const boards = splitBoards(pattern.cells, pattern.w, pattern.h);
@@ -114,14 +114,27 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
           const [ir, ig, ib] = inkFor(hex);
           doc.setTextColor(ir, ig, ib);
           doc.setFont('courier', 'bold');
-          doc.setFontSize(4.2);
-          doc.text(symbols.get(code) ?? '?', x + CELL / 2, y + CELL / 2 + 1.4, { align: 'center' });
+          doc.setFontSize(code.length >= 4 ? 3.6 : 4);
+          doc.text(code, x + CELL / 2, y + CELL / 2 + 1.4, { align: 'center' });
         } else {
           doc.setDrawColor(201, 195, 180);
           doc.setFillColor(201, 195, 180);
           doc.circle(x + CELL / 2, y + CELL / 2, 0.35, 'F');
         }
       }
+    }
+
+    doc.setDrawColor(90, 100, 90);
+    doc.setLineWidth(0.45);
+    for (let c = 0; c <= columns; c += 1) {
+      if ((board.c0 + c) % GRID_BLOCK !== 0) continue;
+      const x = left + c * CELL;
+      doc.line(x, top, x, top + rowCount * CELL);
+    }
+    for (let r = 0; r <= rowCount; r += 1) {
+      if ((board.r0 + r) % GRID_BLOCK !== 0) continue;
+      const y = top + r * CELL;
+      doc.line(left, y, left + columns * CELL, y);
     }
 
     const tableTop = top + 29 * CELL + 5;
@@ -146,7 +159,7 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
       doc.setDrawColor(34, 59, 50);
       doc.rect(x, y - 2.6, 3, 3, 'FD');
       doc.setTextColor(34, 59, 50);
-      doc.text(`${row.symbol.padEnd(2)} ${row.code.padEnd(6)} x ${String(row.count).padStart(5)}`, x + 5, y);
+      doc.text(`${row.code.padEnd(6)} x ${String(row.count).padStart(5)}`, x + 5, y);
     });
 
     doc.setFont('helvetica', 'normal');

@@ -1,6 +1,5 @@
 import { boardCount, finishedSize } from './boards';
 import { getColor, getPalette } from './palettes';
-import { assignSymbols } from './symbols';
 import type { Cell, Pattern, UsageRow } from './types';
 
 export function countCells(cells: Cell[]): Map<string, number> {
@@ -11,17 +10,8 @@ export function countCells(cells: Cell[]): Map<string, number> {
   return counts;
 }
 
-export function symbolsFor(cells: Cell[]): Map<string, string> {
-  const counts = countCells(cells);
-  const ordered = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([code]) => code);
-  return assignSymbols(ordered);
-}
-
 export function usageRows(pattern: Pattern): UsageRow[] {
   const counts = countCells(pattern.cells);
-  const symbols = symbolsFor(pattern.cells);
   const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -31,7 +21,6 @@ export function usageRows(pattern: Pattern): UsageRow[] {
         code,
         name: color?.name ?? code,
         hex: color?.hex ?? '#FFFFFF',
-        symbol: symbols.get(code) ?? '?',
         count,
         ratio: total === 0 ? 0 : count / total,
       };
