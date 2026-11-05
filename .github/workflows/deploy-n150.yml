@@ -1,0 +1,59 @@
+name: Release WeDou to N150
+
+# No R2 secrets required: the artifact is published as a GitHub Release and
+# deploy-agent falls back to GitHub direct (measured 200 / 0.6s from N150).
+# The optional R2 upload used by sibling projects is intentionally omitted.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - id: ver
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Package runtime artifact
+        run: |
+          mkdir -p pkg
+          cp -r dist server package.json package-lock.json pkg/
+          cp scripts/restart-n150.sh pkg/restart.sh
+          chmod +x pkg/restart.sh
+          echo "${{ steps.ver.outputs.sha }}" > pkg/.version
+          tar -czf wedou.tar.gz -C pkg .
+          ls -lh wedou.tar.gz
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.ver.outputs.sha }}
+          name: ${{ steps.ver.outputs.sha }}
+          body: "Auto build ${{ steps.ver.outputs.sha }}"
+          files: wedou.tar.gz
+          prerelease: true
+
+      - name: Notify N150
+        continue-on-error: true
+        run: |
+          sleep 20
+          curl -sS -X POST https://wemusic.sherlockguo.com/deploy \
+            -H "Content-Type: application/json" \
+            -d "{\"project\":\"wedou\",\"version\":\"${{ steps.ver.outputs.sha }}\"}" \
+            --max-time 10 --connect-timeout 5 || true
