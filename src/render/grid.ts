@@ -6,20 +6,32 @@ export const GRID_BLOCK = 5;
 /** Below this cell size a full colour code no longer fits legibly. */
 export const MIN_CODE_CELL = 20;
 
+export interface BoardRect {
+  r0: number;
+  r1: number;
+  c0: number;
+  c1: number;
+}
+
 export interface GridOptions {
   cell: number;
   showCodes: boolean;
   showCoordinates: boolean;
-  highlightRows?: Set<number>;
   progress?: boolean[];
-  completedOnly?: boolean;
+  /** Preview-only: dim completed beads so only the remaining work stands out. */
+  hideCompleted?: boolean;
   /** Preview-only: when set, only beads of this code keep their colour and label. */
   highlightCode?: string | null;
+  /** Preview-only: outline the current 29x29 board. */
+  focusBoard?: BoardRect | null;
+  /** Preview-only: dim beads outside focusBoard. */
+  dimOutsideBoard?: boolean;
 }
 
 const LABEL_SPACE = 22;
 const MAJOR_INK = '#223B32';
 const MINOR_INK = 'rgba(34, 59, 50, 0.55)';
+const BOARD_INK = '#D96B55';
 const PAPER: [number, number, number] = [0xf7, 0xf3, 0xe8];
 /** A dimmed bead keeps 12% of its colour: enough tint to stay locatable, no visual competition. */
 const DIM_MIX = 0.88;
@@ -27,6 +39,24 @@ const DIM_MIX = 0.88;
 /** Empty cells are never dimmed; the selected bead is never dimmed. */
 export function isDimmed(code: string | null, highlightCode?: string | null): boolean {
   return Boolean(highlightCode) && Boolean(code) && code !== highlightCode;
+}
+
+export function isOutsideBoard(row: number, col: number, board?: BoardRect | null): boolean {
+  if (!board) return false;
+  return row < board.r0 || row > board.r1 || col < board.c0 || col > board.c1;
+}
+
+/** One decision shared by fills, labels and progress: is this cell "not now"? */
+export function isSuppressed(
+  options: GridOptions,
+  code: string | null,
+  row: number,
+  col: number,
+  index: number,
+): boolean {
+  return isDimmed(code, options.highlightCode)
+    || (options.dimOutsideBoard === true && isOutsideBoard(row, col, options.focusBoard))
+    || (options.hideCompleted === true && Boolean(code) && Boolean(options.progress?.[index]));
 }
 
 /** Blend a bead colour toward paper instead of covering it with an overlay. */
@@ -57,24 +87,23 @@ function readableInk(hex: string): string {
 }
 
 /** Cell fills and empty-cell dots only; separators are drawn in one pass below. */
-function drawCells(
-  ctx: CanvasRenderingContext2D,
-  pattern: Pattern,
-  cell: number,
-  highlightCode?: string | null,
-): void {
+function drawCells(ctx: CanvasRenderingContext2D, pattern: Pattern, options: GridOptions): void {
+  const { cell } = options;
   for (let r = 0; r < pattern.h; r += 1) {
     for (let c = 0; c < pattern.w; c += 1) {
-      const code = pattern.cells[r * pattern.w + c];
+      const index = r * pattern.w + c;
+      const code = pattern.cells[index];
       const x = LABEL_SPACE + c * cell;
       const y = LABEL_SPACE + r * cell;
+      const suppressed = isSuppressed(options, code, r, c, index);
       const hex = hexOf(pattern.paletteId, code);
       if (hex) {
-        ctx.fillStyle = isDimmed(code, highlightCode) ? dimmedFill(hex) : hex;
+        ctx.fillStyle = suppressed ? dimmedFill(hex) : hex;
         ctx.fillRect(x, y, cell, cell);
       } else {
-        ctx.fillStyle = '#EDE8DC';
+        ctx.fillStyle = suppressed ? `rgb(${PAPER.join(', ')})` : '#EDE8DC';
         ctx.fillRect(x, y, cell, cell);
+        if (suppressed) continue;
         ctx.fillStyle = '#C9C3B4';
         ctx.beginPath();
         ctx.arc(x + cell / 2, y + cell / 2, Math.max(1, cell * 0.07), 0, Math.PI * 2);
@@ -112,11 +141,7 @@ function drawMinorGrid(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: nu
 }
 
 /** Colour codes sit inside the dashed cell borders, so no guide crosses them. */
-function drawLabels(
-  ctx: CanvasRenderingContext2D,
-  pattern: Pattern,
-  options: GridOptions,
-): void {
+function drawLabels(ctx: CanvasRenderingContext2D, pattern: Pattern, options: GridOptions): void {
   const { cell } = options;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -126,7 +151,8 @@ function drawLabels(
       const code = pattern.cells[index];
       const x = LABEL_SPACE + c * cell;
       const y = LABEL_SPACE + r * cell;
-      if (options.showCodes && cell >= MIN_CODE_CELL && code && !isDimmed(code, options.highlightCode)) {
+      const suppressed = isSuppressed(options, code, r, c, index);
+      if (options.showCodes && cell >= MIN_CODE_CELL && code && !suppressed) {
         const hex = hexOf(pattern.paletteId, code) ?? '#EDE8DC';
         ctx.fillStyle = readableInk(hex);
         let fontSize = Math.max(9, Math.floor(cell * 0.5));
@@ -138,7 +164,7 @@ function drawLabels(
         }
         ctx.fillText(code, x + cell / 2, y + cell / 2);
       }
-      if (options.progress?.[index] && !isDimmed(code, options.highlightCode)) {
+      if (options.progress?.[index] && code && !suppressed) {
         ctx.fillStyle = 'rgba(34, 59, 50, 0.55)';
         ctx.fillRect(x, y, cell, cell);
       }
@@ -199,25 +225,21 @@ export function drawGrid(
     }
   }
 
-  drawCells(ctx, pattern, cell, options.highlightCode);
+  drawCells(ctx, pattern, options);
   drawMinorGrid(ctx, pattern, cell);
   drawLabels(ctx, pattern, options);
   drawBlockLines(ctx, pattern, cell);
 
-  if (options.highlightRows?.size) {
-    ctx.strokeStyle = '#D96B55';
-    ctx.lineWidth = 2;
-    for (const row of options.highlightRows) {
-      if (options.completedOnly && options.progress?.slice(row * pattern.w, (row + 1) * pattern.w).every(Boolean)) {
-        continue;
-      }
-      ctx.strokeRect(
-        LABEL_SPACE + 0.5,
-        LABEL_SPACE + row * cell + 0.5,
-        pattern.w * cell - 1,
-        cell - 1,
-      );
-    }
+  if (options.focusBoard) {
+    const board = options.focusBoard;
+    ctx.strokeStyle = BOARD_INK;
+    ctx.lineWidth = Math.max(2, cell * 0.09);
+    ctx.strokeRect(
+      LABEL_SPACE + board.c0 * cell + 0.5,
+      LABEL_SPACE + board.r0 * cell + 0.5,
+      (board.c1 - board.c0 + 1) * cell - 1,
+      (board.r1 - board.r0 + 1) * cell - 1,
+    );
   }
 }
 

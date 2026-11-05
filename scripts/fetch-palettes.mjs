@@ -11,6 +11,8 @@ const SOURCES = [
   { id: 'perler-117', slug: 'perler', brand: 'Perler', name: 'Perler 117', expected: 117 },
   { id: 'hama-89', slug: 'hama', brand: 'Hama', name: 'Hama 89', expected: 89 },
   { id: 'artkal-176', slug: 'artkal', brand: 'Artkal', name: 'Artkal 176', expected: 176 },
+  { id: 'artkal-mini-221', slug: 'artkal-mini', brand: 'Artkal', name: 'Artkal Mini 221', expected: 221 },
+  { id: 'coco-291', slug: 'coco', brand: 'COCO', name: 'COCO 291', expected: 291 },
 ];
 
 function decodeRsc(html) {

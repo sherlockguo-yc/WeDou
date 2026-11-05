@@ -1,4 +1,5 @@
 import { drawGrid, gridCanvasSize } from './grid';
+import type { GridOptions } from './grid';
 import { patternStats, usageRows } from '../core/stats';
 import { getPalette } from '../core/palettes';
 import type { Pattern } from '../core/types';
@@ -9,15 +10,47 @@ const FOOTER_TOP = 16;
 const CHART_TOP = 80;
 const TABLE_GAP = 24;
 
+/** Exports never receive preview interaction state; tests lock this down. */
+export const PNG_GRID_OPTIONS: GridOptions = {
+  cell: CELL,
+  showCodes: true,
+  showCoordinates: true,
+};
+
+/** Canvas geometry is pure so tests can prove every legend row fits. */
+export function pngLayout(pattern: Pattern): {
+  width: number;
+  height: number;
+  tableTop: number;
+  lastRowY: number;
+  footerNoteY: number;
+  rowCount: number;
+} {
+  const grid = gridCanvasSize(pattern, CELL);
+  const rowCount = usageRows(pattern).length;
+  const footerHeight = FOOTER_TOP + 8 + Math.max(4, rowCount) * FOOTER_ROW + 56;
+  const width = Math.max(grid.width + 40, 720);
+  const tableTop = CHART_TOP + grid.height + TABLE_GAP;
+  const lastRowY = tableTop + FOOTER_TOP + rowCount * FOOTER_ROW;
+  return {
+    width,
+    height: tableTop + footerHeight,
+    tableTop,
+    lastRowY,
+    footerNoteY: lastRowY + FOOTER_ROW,
+    rowCount,
+  };
+}
+
 /** Full-resolution chart with a printed-style usage table. */
 export function renderPatternPng(pattern: Pattern): HTMLCanvasElement {
-  const grid = gridCanvasSize(pattern, CELL);
   const rows = usageRows(pattern);
-  const footerHeight = FOOTER_TOP + 8 + Math.max(4, rows.length) * FOOTER_ROW + 56;
+  const layout = pngLayout(pattern);
   const canvas = document.createElement('canvas');
-  const width = Math.max(grid.width + 40, 720);
+  const width = layout.width;
   canvas.width = width;
-  canvas.height = CHART_TOP + grid.height + TABLE_GAP + footerHeight;
+  canvas.height = layout.height;
+  const tableTop = layout.tableTop;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('浏览器不支持 Canvas 2D');
 
@@ -40,10 +73,9 @@ export function renderPatternPng(pattern: Pattern): HTMLCanvasElement {
   const scratch = document.createElement('canvas');
   const scratchCtx = scratch.getContext('2d');
   if (!scratchCtx) throw new Error('浏览器不支持 Canvas 2D');
-  drawGrid(scratchCtx, pattern, { cell: CELL, showCodes: true, showCoordinates: true });
+  drawGrid(scratchCtx, pattern, PNG_GRID_OPTIONS);
   ctx.drawImage(scratch, 24, CHART_TOP);
 
-  const tableTop = CHART_TOP + grid.height + TABLE_GAP;
   const stats = patternStats(pattern);
   ctx.fillStyle = '#223B32';
   ctx.font = '600 15px ui-monospace, monospace';

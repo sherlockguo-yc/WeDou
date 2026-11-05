@@ -30,8 +30,14 @@ describe('CIEDE2000', () => {
 });
 
 describe('palette matching', () => {
-  it('contains the five verified palettes', () => {
-    expect(PALETTES.map((palette) => palette.colors.length)).toEqual([221, 291, 117, 89, 176]);
+  it('contains the seven verified palettes', () => {
+    expect(PALETTES.map((palette) => palette.colors.length)).toEqual([221, 291, 117, 89, 176, 221, 291]);
+  });
+
+  it('includes the Artkal Mini and COCO kits with valid codes', () => {
+    expect(getPalette('artkal-mini-221').colors[0].code).toBe('MA1');
+    expect(getPalette('coco-291').colors[0].code).toBe('E02');
+    expect(duplicateCodes('artkal-mini-221').size).toBe(1);
   });
 
   it('has unique codes and valid hex values in every palette', () => {

@@ -50,6 +50,14 @@ export function boardCount(w: number, h: number, size = BOARD_SIZE): number {
   return Math.ceil(w / size) * Math.ceil(h / size);
 }
 
+/** Clamp a 1-based inclusive board range so a batched PDF is never empty or out of bounds. */
+export function clampBoardRange(total: number, from: number, to: number): { from: number; to: number } {
+  const last = Math.max(1, Math.floor(Number.isFinite(total) ? total : 1));
+  const start = Math.min(Math.max(1, Math.floor(Number.isFinite(from) ? from : 1)), last);
+  const end = Math.min(Math.max(start, Math.floor(Number.isFinite(to) ? to : last)), last);
+  return { from: start, to: end };
+}
+
 const PITCH_CM: Record<BeadSize, number> = { '5mm': 0.5, '2.6mm': 0.26 };
 
 export function finishedSize(w: number, h: number, beadSize: BeadSize): string {

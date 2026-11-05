@@ -1,4 +1,4 @@
-import { boardLabel, splitBoards } from '../core/boards';
+import { boardLabel, clampBoardRange, splitBoards } from '../core/boards';
 import { getColor, getPalette } from '../core/palettes';
 import { patternStats, usageRows } from '../core/stats';
 import type { Pattern } from '../core/types';
@@ -52,13 +52,21 @@ export function renderTitleImage(
 }
 
 /** One A4 page per 29x29 board, with global coordinates and a per-colour count. */
-export async function exportPatternPdf(pattern: Pattern, filename: string): Promise<number> {
+export async function exportPatternPdf(
+  pattern: Pattern,
+  filename: string,
+  range?: { from: number; to: number },
+): Promise<number> {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const palette = getPalette(pattern.paletteId);
   const rows = usageRows(pattern);
   const stats = patternStats(pattern);
-  const boards = splitBoards(pattern.cells, pattern.w, pattern.h);
+  const allBoards = splitBoards(pattern.cells, pattern.w, pattern.h);
+  const selected = range
+    ? clampBoardRange(allBoards.length, range.from, range.to)
+    : { from: 1, to: allBoards.length };
+  const boards = allBoards.slice(selected.from - 1, selected.to);
 
   boards.forEach((board, pageIndex) => {
     if (pageIndex > 0) doc.addPage();
@@ -77,7 +85,7 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
     doc.setFontSize(8);
     doc.setTextColor(107, 115, 105);
     doc.text(
-      `${palette.name}  |  BOARD ${board.index + 1}/${boards.length}  |  ${boardLabel(board)}  |  ${pattern.beadSize}`,
+      `${palette.name}  |  BOARD ${board.index + 1}/${allBoards.length}  |  ${boardLabel(board)}  |  ${pattern.beadSize}`,
       MARGIN,
       20,
     );

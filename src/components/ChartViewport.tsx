@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Grid2X2, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
 import ChartCanvas from './ChartCanvas';
+import type { BoardRect } from '../render/grid';
 import type { Pattern } from '../core/types';
 
 const CELL_STEPS = [8, 12, 16, 22, 30, 42];
@@ -16,9 +17,10 @@ export interface ChartViewportProps {
   pattern: Pattern;
   onCell?: (index: number) => void;
   progress?: boolean[];
-  highlightRows?: Set<number>;
-  completedOnly?: boolean;
+  hideCompleted?: boolean;
   highlightCode?: string | null;
+  focusBoard?: BoardRect | null;
+  dimOutsideBoard?: boolean;
   interactive?: boolean;
 }
 
@@ -27,9 +29,10 @@ export default function ChartViewport({
   pattern,
   onCell,
   progress,
-  highlightRows,
-  completedOnly,
+  hideCompleted,
   highlightCode,
+  focusBoard,
+  dimOutsideBoard,
   interactive,
 }: ChartViewportProps) {
   const [cell, setCell] = useState(() => defaultCell(pattern.w));
@@ -88,9 +91,10 @@ export default function ChartViewport({
           interactive={interactive}
           onCell={onCell}
           progress={progress}
-          highlightRows={highlightRows}
-          completedOnly={completedOnly}
+          hideCompleted={hideCompleted}
           highlightCode={highlightCode}
+          focusBoard={focusBoard}
+          dimOutsideBoard={dimOutsideBoard}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
+  ArrowRightLeft,
   Brush,
   Download,
   Eraser,
@@ -20,7 +21,7 @@ import {
 import ChartViewport from '../components/ChartViewport';
 import EquivalentPanel from '../components/EquivalentPanel';
 import UsageTable from '../components/UsageTable';
-import { ColorSearch, Notice, Toggle } from '../components/ui';
+import { ColorSearch, Modal, Notice, Toggle } from '../components/ui';
 import { PALETTES, getPalette } from '../core/palettes';
 import { patternStats } from '../core/stats';
 import type { SegmentProgress } from '../core/segment';
@@ -64,6 +65,8 @@ export interface StudioProps {
   onUndo: () => void;
   onRedo: () => void;
   onExportPdf: () => void;
+  onExportPdfRange: (from: number, to: number) => void;
+  onReplaceCode: (from: string, to: string) => void;
   onExportPng: () => void;
   onExportJson: () => void;
   onOpenGuide: () => void;
@@ -75,6 +78,17 @@ export default function StudioView(props: StudioProps) {
   const [dragging, setDragging] = useState(false);
   const busy = props.status === 'loading' || props.status === 'exporting' || Boolean(props.segment);
   const stats = props.pattern ? patternStats(props.pattern) : null;
+  const boards = stats?.boards ?? 1;
+  const source = props.highlightCode;
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [replaceTarget, setReplaceTarget] = useState('');
+  const [pdfFrom, setPdfFrom] = useState(1);
+  const [pdfTo, setPdfTo] = useState(1);
+
+  useEffect(() => {
+    setPdfFrom(1);
+    setPdfTo(boards);
+  }, [boards]);
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -353,6 +367,12 @@ export default function StudioView(props: StudioProps) {
                 selectedCode={props.highlightCode}
                 onSelect={props.onHighlightCode}
               />
+              <div className="tool-row">
+                <button className="btn small ghost" disabled={!source} onClick={() => setReplaceOpen(true)}>
+                  <ArrowRightLeft size={14} /> 区域换色
+                </button>
+                <span className="eyebrow">{source ? `把选中的 ${source} 全部换成另一色号` : '先点上面某个色号'}</span>
+              </div>
               <EquivalentPanel paletteId={props.paletteId} code={props.activeCode} />
               <div className="tool-row">
                 <button className="btn primary" onClick={props.onExportPdf} disabled={busy}><FileText size={15} /> A4 分板 PDF</button>
@@ -362,6 +382,41 @@ export default function StudioView(props: StudioProps) {
                 <button className="btn warm" onClick={props.onOpenGuide} disabled={busy}><LayoutGrid size={15} /> 开始拼</button>
                 <button className="btn ghost" onClick={props.onSave} disabled={busy}><Save size={15} /> 保存图纸</button>
               </div>
+              {boards > 12 ? (
+                <div style={{ marginTop: 'var(--s2)' }}>
+                  <Notice>共 {boards} 块 29×29 板，PDF 会导出 {boards} 页；可只导出一段分批打印。</Notice>
+                </div>
+              ) : null}
+              {boards > 1 ? (
+                <div className="tool-row">
+                  <span className="eyebrow">分批导出第</span>
+                  <input
+                    className="input mono"
+                    type="number"
+                    min={1}
+                    max={boards}
+                    value={pdfFrom}
+                    aria-label="起始板号"
+                    style={{ width: '5em' }}
+                    onChange={(event) => setPdfFrom(Number(event.target.value))}
+                  />
+                  <span className="eyebrow">至</span>
+                  <input
+                    className="input mono"
+                    type="number"
+                    min={1}
+                    max={boards}
+                    value={pdfTo}
+                    aria-label="结束板号"
+                    style={{ width: '5em' }}
+                    onChange={(event) => setPdfTo(Number(event.target.value))}
+                  />
+                  <span className="eyebrow">板</span>
+                  <button className="btn small ghost" disabled={busy} onClick={() => props.onExportPdfRange(pdfFrom, pdfTo)}>
+                    <FileText size={14} /> 导出所选板
+                  </button>
+                </div>
+              ) : null}
               <div style={{ marginTop: 'var(--s2)' }}>
                 <Notice>空格 = 不放豆。格内符号用于灰度打印时区分相近色；请以色号为准，不要按屏幕颜色配豆。</Notice>
               </div>
@@ -369,6 +424,25 @@ export default function StudioView(props: StudioProps) {
           </>
         )}
       </div>
+      {replaceOpen && source ? (
+        <Modal title={`把 ${source} 全部换成另一种颜色`} onClose={() => setReplaceOpen(false)}>
+          <p>把图纸里所有 <span className="mono">{source}</span> 的豆子换成目标色号，替换后可用「撤销」一次还原。</p>
+          <ColorSearch paletteId={props.paletteId} value={replaceTarget} onChange={setReplaceTarget} />
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={() => setReplaceOpen(false)}>取消</button>
+            <button
+              className="btn primary"
+              disabled={!replaceTarget || replaceTarget === source}
+              onClick={() => {
+                props.onReplaceCode(source, replaceTarget);
+                setReplaceOpen(false);
+              }}
+            >
+              确认替换
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

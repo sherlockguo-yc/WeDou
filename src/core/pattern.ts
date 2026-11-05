@@ -42,6 +42,22 @@ export function touch(pattern: Pattern): Pattern {
   return { ...pattern, version: pattern.version + 1, updatedAt: new Date().toISOString() };
 }
 
+/** Replace every bead of one code with another; progress and grid length stay untouched. */
+export function replaceCode(
+  cells: Cell[],
+  from: string,
+  to: string | null,
+): { cells: Cell[]; changed: number } {
+  if (from === to) return { cells: [...cells], changed: 0 };
+  let changed = 0;
+  const next = cells.map((cell) => {
+    if (cell !== from) return cell;
+    changed += 1;
+    return to;
+  });
+  return { cells: next, changed };
+}
+
 export function serialize(pattern: Pattern): string {
   return JSON.stringify(pattern, null, 2);
 }

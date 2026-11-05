@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { PointerEvent } from 'react';
 import { cellFromPoint, drawGrid } from '../render/grid';
+import type { BoardRect } from '../render/grid';
 import type { Pattern } from '../core/types';
 
 export interface ChartCanvasProps {
@@ -8,9 +9,10 @@ export interface ChartCanvasProps {
   cell: number;
   onCell?: (index: number) => void;
   progress?: boolean[];
-  highlightRows?: Set<number>;
-  completedOnly?: boolean;
+  hideCompleted?: boolean;
   highlightCode?: string | null;
+  focusBoard?: BoardRect | null;
+  dimOutsideBoard?: boolean;
   interactive?: boolean;
 }
 
@@ -19,9 +21,10 @@ export default function ChartCanvas({
   cell,
   onCell,
   progress,
-  highlightRows,
-  completedOnly,
+  hideCompleted,
   highlightCode,
+  focusBoard,
+  dimOutsideBoard,
   interactive,
 }: ChartCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,11 +39,12 @@ export default function ChartCanvas({
       showCodes: true,
       showCoordinates: true,
       progress,
-      highlightRows,
-      completedOnly,
+      hideCompleted,
       highlightCode,
+      focusBoard,
+      dimOutsideBoard,
     });
-  }, [pattern, cell, progress, highlightRows, completedOnly, highlightCode]);
+  }, [pattern, cell, progress, hideCompleted, highlightCode, focusBoard, dimOutsideBoard]);
 
   const handle = (event: PointerEvent<HTMLCanvasElement>, started: boolean) => {
     if (!onCell || !interactive) return;

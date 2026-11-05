@@ -11,7 +11,7 @@ import { ConfirmModal, Toast } from './components/ui';
 import { recommendGridSize } from './core/boards';
 import { quantizeImage } from './core/convert';
 import { optimizeGrid } from './core/optimize';
-import { createPattern, parsePattern, serialize, touch } from './core/pattern';
+import { createPattern, parsePattern, replaceCode as replaceCodeCells, serialize, touch } from './core/pattern';
 import { DEFAULT_PALETTE_ID, getPalette } from './core/palettes';
 import {
   isTogglePatch,
@@ -491,13 +491,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  const replaceColour = (from: string, to: string) => {
+    const current = patternRef.current;
+    if (!current || from === to) return;
+    const result = replaceCodeCells(current.cells, from, to);
+    if (!result.changed) {
+      notify(`图纸里没有 ${from}`, 'error');
+      return;
+    }
+    const next = touch({ ...current, cells: result.cells });
+    setHistory((state) => ({ past: [...state.past.slice(-49), current], future: [] }));
+    setPattern(next);
+    setDirty(true);
+    notify(`已把 ${from} 的 ${result.changed} 颗豆换成 ${to}`);
+  };
+
   /* ---------- exports ---------- */
-  const exportPdf = async () => {
+  const exportPdf = async (range?: { from: number; to: number }) => {
     const current = patternRef.current;
     if (!current) return;
     setStatus('exporting');
     try {
-      const pages = await exportPatternPdf(current, `${filename(current)}-boards.pdf`);
+      const suffix = range ? `-boards-${range.from}-${range.to}` : '';
+      const pages = await exportPatternPdf(current, `${filename(current)}${suffix}.pdf`, range);
       notify(`已导出 ${pages} 页 A4 分板图纸`);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'PDF 导出失败', 'error');
@@ -715,7 +731,9 @@ export default function App() {
             onPaint={paintCell}
             onUndo={undo}
             onRedo={redo}
-            onExportPdf={exportPdf}
+            onExportPdf={() => void exportPdf()}
+            onExportPdfRange={(from, to) => void exportPdf({ from, to })}
+            onReplaceCode={replaceColour}
             onExportPng={exportPng}
             onExportJson={exportJson}
             onOpenGuide={() => setView('guide')}
