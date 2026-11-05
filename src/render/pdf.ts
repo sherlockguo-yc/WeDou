@@ -107,9 +107,7 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
         const y = top + r * CELL;
         const hex = code ? getColor(pattern.paletteId, code)?.hex ?? '#FFFFFF' : '#EDE8DC';
         doc.setFillColor(...rgb(hex));
-        doc.setDrawColor(150, 155, 145);
-        doc.setLineWidth(0.15);
-        doc.rect(x, y, CELL, CELL, 'FD');
+        doc.rect(x, y, CELL, CELL, 'F');
         if (!code) {
           doc.setDrawColor(201, 195, 180);
           doc.setFillColor(201, 195, 180);
@@ -118,26 +116,21 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
       }
     }
 
-    // Dashed X inside each 5x5 block, aligned to the same global boundaries.
-    doc.setLineDashPattern([1.4, 1], 0);
-    doc.setDrawColor(140, 150, 140);
-    doc.setLineWidth(0.28);
-    for (let c = 0; c < columns; c += 1) {
-      if ((board.c0 + c) % GRID_BLOCK !== 0) continue;
-      for (let r = 0; r < rowCount; r += 1) {
-        if ((board.r0 + r) % GRID_BLOCK !== 0) continue;
-        const x = left + c * CELL;
-        const y = top + r * CELL;
-        const bw = Math.min(GRID_BLOCK, columns - c) * CELL;
-        const bh = Math.min(GRID_BLOCK, rowCount - r) * CELL;
-        doc.line(x, y, x + bw, y + bh);
-        doc.line(x + bw, y, x, y + bh);
-      }
+    // Dashed separators between individual beads; solid heavy lines mark 5x5 blocks.
+    doc.setLineDashPattern([1.1, 0.85], 0);
+    doc.setDrawColor(90, 100, 90);
+    doc.setLineWidth(0.25);
+    for (let c = 0; c <= columns; c += 1) {
+      const x = left + c * CELL;
+      doc.line(x, top, x, top + rowCount * CELL);
+    }
+    for (let r = 0; r <= rowCount; r += 1) {
+      const y = top + r * CELL;
+      doc.line(left, y, left + columns * CELL, y);
     }
     doc.setLineDashPattern([], 0);
 
-    // Pass 3: colour codes above the dashes, on a patch of the cell's own colour
-    // so the diagonals never strike through the text.
+    // Pass 3: colour codes inside the dashed cell borders.
     for (let r = 0; r < rowCount; r += 1) {
       for (let c = 0; c < columns; c += 1) {
         const code = board.cells[r * columns + c];
@@ -147,9 +140,6 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
         const y = top + r * CELL;
         doc.setFont('courier', 'bold');
         doc.setFontSize(code.length >= 4 ? 4.2 : 4.8);
-        const textWidth = doc.getTextWidth(code);
-        doc.setFillColor(...rgb(hex));
-        doc.rect(x + CELL / 2 - textWidth / 2 - 0.4, y + CELL / 2 - 1.1, textWidth + 0.8, 2.2, 'F');
         const [ir, ig, ib] = inkFor(hex);
         doc.setTextColor(ir, ig, ib);
         doc.text(code, x + CELL / 2, y + CELL / 2 + 1.6, { align: 'center' });

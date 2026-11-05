@@ -17,7 +17,7 @@ export interface GridOptions {
 
 const LABEL_SPACE = 22;
 const MAJOR_INK = '#223B32';
-const MINOR_INK = 'rgba(34, 59, 50, 0.32)';
+const MINOR_INK = 'rgba(34, 59, 50, 0.55)';
 
 export function gridCanvasSize(pattern: Pattern, cell: number): { width: number; height: number } {
   const offset = LABEL_SPACE;
@@ -35,7 +35,7 @@ function readableInk(hex: string): string {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#223b32' : '#F7F3E8';
 }
 
-/** Cell fills, empty-cell dots and the faint per-cell grid. */
+/** Cell fills and empty-cell dots only; separators are drawn in one pass below. */
 function drawCells(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number): void {
   for (let r = 0; r < pattern.h; r += 1) {
     for (let c = 0; c < pattern.w; c += 1) {
@@ -54,48 +54,38 @@ function drawCells(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number
         ctx.arc(x + cell / 2, y + cell / 2, Math.max(1, cell * 0.07), 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.strokeStyle = MINOR_INK;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
     }
   }
 }
 
 /**
- * Dashed X inside every 5x5 block, like a printed bead chart. A light dashed
- * halo underneath keeps the guide visible on both dark and light beads.
+ * Dashed lines between individual beads. Solid heavy lines mark 5x5 blocks,
+ * dashes separate each bead inside a block. Drawing the whole grid in one pass
+ * keeps dash phases aligned instead of double-stroking shared borders.
  */
-function drawBlockDiagonals(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number): void {
-  const dash = [Math.max(4, cell * 0.7), Math.max(2, cell * 0.35)];
-  const width = Math.max(1.4, cell * 0.055);
+function drawMinorGrid(ctx: CanvasRenderingContext2D, pattern: Pattern, cell: number): void {
+  const width = pattern.w * cell;
+  const height = pattern.h * cell;
   ctx.save();
-  ctx.setLineDash(dash);
-  for (let r = 0; r < pattern.h; r += GRID_BLOCK) {
-    for (let c = 0; c < pattern.w; c += GRID_BLOCK) {
-      const x = LABEL_SPACE + c * cell;
-      const y = LABEL_SPACE + r * cell;
-      const bw = Math.min(GRID_BLOCK, pattern.w - c) * cell;
-      const bh = Math.min(GRID_BLOCK, pattern.h - r) * cell;
-      const cross = () => {
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + bw, y + bh);
-        ctx.moveTo(x + bw, y);
-        ctx.lineTo(x, y + bh);
-        ctx.stroke();
-      };
-      ctx.lineWidth = width + 1.2;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      cross();
-      ctx.lineWidth = width;
-      ctx.strokeStyle = 'rgba(34, 59, 50, 0.62)';
-      cross();
-    }
+  ctx.strokeStyle = MINOR_INK;
+  ctx.lineWidth = Math.max(1.2, cell * 0.04);
+  ctx.setLineDash([Math.max(2, cell * 0.22), Math.max(2, cell * 0.18)]);
+  ctx.beginPath();
+  for (let c = 0; c <= pattern.w; c += 1) {
+    const x = LABEL_SPACE + c * cell + 0.5;
+    ctx.moveTo(x, LABEL_SPACE);
+    ctx.lineTo(x, LABEL_SPACE + height);
   }
+  for (let r = 0; r <= pattern.h; r += 1) {
+    const y = LABEL_SPACE + r * cell + 0.5;
+    ctx.moveTo(LABEL_SPACE, y);
+    ctx.lineTo(LABEL_SPACE + width, y);
+  }
+  ctx.stroke();
   ctx.restore();
 }
 
-/** Colour codes are drawn above the diagonals so their strokes stay readable. */
+/** Colour codes sit inside the dashed cell borders, so no guide crosses them. */
 function drawLabels(
   ctx: CanvasRenderingContext2D,
   pattern: Pattern,
@@ -112,25 +102,14 @@ function drawLabels(
       const y = LABEL_SPACE + r * cell;
       if (options.showCodes && cell >= MIN_CODE_CELL && code) {
         const hex = hexOf(pattern.paletteId, code) ?? '#EDE8DC';
+        ctx.fillStyle = readableInk(hex);
         let fontSize = Math.max(9, Math.floor(cell * 0.5));
         ctx.font = `700 ${fontSize}px ui-monospace, monospace`;
-        let measured = ctx.measureText(code).width;
+        const measured = ctx.measureText(code).width;
         if (measured > cell * 0.92) {
           fontSize = Math.max(8, Math.floor((fontSize * cell * 0.92) / measured));
           ctx.font = `700 ${fontSize}px ui-monospace, monospace`;
-          measured = ctx.measureText(code).width;
         }
-        // Clear the diagonal dashes behind the text with the cell's own colour,
-        // so they never strike through a colour code.
-        const pad = Math.max(1, cell * 0.07);
-        ctx.fillStyle = hex;
-        ctx.fillRect(
-          x + cell / 2 - measured / 2 - pad,
-          y + cell / 2 - fontSize * 0.62,
-          measured + pad * 2,
-          fontSize * 1.24,
-        );
-        ctx.fillStyle = readableInk(hex);
         ctx.fillText(code, x + cell / 2, y + cell / 2);
       }
       if (options.progress?.[index]) {
@@ -195,7 +174,7 @@ export function drawGrid(
   }
 
   drawCells(ctx, pattern, cell);
-  drawBlockDiagonals(ctx, pattern, cell);
+  drawMinorGrid(ctx, pattern, cell);
   drawLabels(ctx, pattern, options);
   drawBlockLines(ctx, pattern, cell);
 
