@@ -39,6 +39,7 @@ export interface StudioProps {
   beadSize: BeadSize;
   segment: SegmentProgress | null;
   segmentApplied: boolean;
+  approximated: number;
   canUndo: boolean;
   canRedo: boolean;
   tool: Tool;
@@ -263,6 +264,13 @@ export default function StudioView(props: StudioProps) {
                 </div>
                 <span className="eyebrow">{props.status === 'loading' ? '转换中…' : props.status === 'exporting' ? '导出中…' : '实时预览'}</span>
               </div>
+              {props.approximated > 0 ? (
+                <div style={{ marginBottom: 'var(--s2)' }}>
+                  <Notice>
+                    有 {props.approximated} 格与色板颜色差异较大（ΔE &gt; 10），属于近似替代。建议放大核对该处色号，或换一套更接近的色板。
+                  </Notice>
+                </div>
+              ) : null}
               <ChartViewport pattern={props.pattern} interactive onCell={props.onPaint} />
               <div className="tool-row">
                 <button className={`btn small${props.tool === 'brush' ? ' primary' : ''}`} onClick={() => props.onTool('brush')} title="刷色"><Brush size={14} /> 刷色</button>

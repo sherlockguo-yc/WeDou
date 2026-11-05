@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { nearestColor, rgbToLab } from '../src/core/color';
 import { quantizeGrid, sampleGrid } from '../src/core/convert';
 import { limitColors, removeIsolated } from '../src/core/optimize';
 import { createPattern } from '../src/core/pattern';
-import { getPalette } from '../src/core/palettes';
+import { getLabCache, getPalette } from '../src/core/palettes';
 import { usageRows, patternStats } from '../src/core/stats';
 import type { ImageLike } from '../src/core/convert';
 
@@ -66,6 +67,27 @@ describe('optimisation', () => {
     const cells = new Array<string>(9).fill('A1');
     cells[4] = 'A2';
     expect(removeIsolated(cells, 3, 3)[4]).toBe('A1');
+  });
+});
+
+describe('approximate colour reporting', () => {
+  it('counts far-from-palette cells in both dither modes', () => {
+    const palette = getPalette('hama-89');
+    const cache = getLabCache('hama-89');
+    let far: { r: number; g: number; b: number } | null = null;
+    for (let r = 0; r < 256 && !far; r += 37) {
+      for (let g = 0; g < 256 && !far; g += 37) {
+        for (let b = 0; b < 256 && !far; b += 37) {
+          const candidate = { r, g, b };
+          const match = nearestColor(rgbToLab(candidate), palette.colors, cache);
+          if (match && match.deltaE > 10) far = candidate;
+        }
+      }
+    }
+    expect(far).not.toBeNull();
+    const samples: ({ r: number; g: number; b: number } | null)[] = [far];
+    expect(quantizeGrid(samples, 1, 1, 'hama-89', { dithering: false }).approximated).toBe(1);
+    expect(quantizeGrid(samples, 1, 1, 'hama-89', { dithering: true }).approximated).toBe(1);
   });
 });
 

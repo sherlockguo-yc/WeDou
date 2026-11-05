@@ -10,7 +10,24 @@ export const PALETTE_SOURCE = data.source;
 export const PALETTE_FETCHED_AT = data.fetchedAt;
 export const PALETTE_NOTE = data.note;
 
-export const DEFAULT_PALETTE_ID = PALETTES[0].id;
+/** MARD 291 is the most common full retail kit in the Chinese bead community. */
+export const DEFAULT_PALETTE_ID =
+  PALETTES.find((palette) => palette.id === 'mard-291')?.id ?? PALETTES[0].id;
+
+/** Codes sharing one HEX: buying both means buying the same colour twice. */
+export function duplicateCodes(paletteId: string): Map<string, string[]> {
+  const byHex = new Map<string, string[]>();
+  for (const color of getPalette(paletteId).colors) {
+    const group = byHex.get(color.hex) ?? [];
+    group.push(color.code);
+    byHex.set(color.hex, group);
+  }
+  const duplicates = new Map<string, string[]>();
+  for (const [hex, codes] of byHex) {
+    if (codes.length > 1) duplicates.set(hex, codes);
+  }
+  return duplicates;
+}
 
 const cacheByPalette = new Map<string, LabCache>();
 const colorIndex = new Map<string, Map<string, BeadColor>>();

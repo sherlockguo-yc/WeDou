@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deltaE00, hexToLab, hexToRgb, nearestColor } from '../src/core/color';
-import { PALETTES, getLabCache, getPalette } from '../src/core/palettes';
+import { DEFAULT_PALETTE_ID, PALETTES, duplicateCodes, getLabCache, getPalette } from '../src/core/palettes';
 
 describe('colour conversion', () => {
   it('parses 6-digit hex', () => {
@@ -40,6 +40,16 @@ describe('palette matching', () => {
       expect(codes.size).toBe(palette.colors.length);
       expect(palette.colors.every((color) => /^#[0-9A-F]{6}$/.test(color.hex))).toBe(true);
     }
+  });
+
+  it('defaults to the MARD 291 full kit', () => {
+    expect(DEFAULT_PALETTE_ID).toBe('mard-291');
+  });
+
+  it('reports codes that share one HEX', () => {
+    const duplicates = duplicateCodes('mard-291');
+    expect([...duplicates.values()].some((codes) => codes.includes('Q4') && codes.includes('R11'))).toBe(true);
+    expect(duplicateCodes('mard-221').size).toBe(0);
   });
 
   it('finds a bounded nearest colour for an arbitrary RGB', () => {

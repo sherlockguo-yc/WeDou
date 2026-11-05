@@ -30,20 +30,20 @@ npm start          # Express 同时托管 dist/ 与 /api
 
 | 命令 | 作用 |
 |---|---|
-| `npm test` | 核心算法单元测试（Vitest，25 项） |
+| `npm test` | 核心算法单元测试（Vitest，28 项） |
 | `npm run build` | TypeScript 检查 + Vite 构建 |
 | `npm run fetch:palettes` | 重新抓取色卡数据，写入 `src/data/palettes.json` |
 
 ## 功能
 
 - 上传 / 拖拽 / 粘贴图片；可选浏览器内 AI 去背景（ONNX + ISNet，模型按需下载，失败自动降级手动擦除）
-- 5 套真实色板：MARD 221 / MARD 291 / Perler 117 / Hama 89 / Artkal 176；Lab + CIEDE2000 最近色匹配
+- 5 套真实色板（**默认 MARD 291**）：MARD 221 / MARD 291 / Perler 117 / Hama 89 / Artkal 176；Lab + CIEDE2000 最近色匹配；同色不同号会标出，近似替代格数会提示
 - 限色、去孤立豆、小区域合并、可选抖动；透明区自动留空
 - 点格改色、拖拽刷色、橡皮、吸管、区域换色思路下的撤销重做
 - 导出按 29×29 分板的 A4 PDF、高清 PNG、工程 JSON
 - 网页拼装引导：逐行高亮、点格标记完成、进度持久化
 - 跨品牌单色替代建议（按色差自算）
-- 本地草稿 + 账号云同步；不登录也能完整使用转换与导出
+- 本地草稿 + 账号云同步（SQLite + 一次性恢复码找回密码 + 6 小时自动备份）；不登录也能完整使用转换与导出
 
 ## 色卡数据
 
@@ -61,20 +61,21 @@ src/render/      Canvas 网格、PNG、A4 分页 PDF
 src/components/  通用控件、图纸画布、用量表、替代建议
 src/views/      工作台、拼装引导、图纸库、登录
 src/api/        后端 API 客户端
-server/         Express 账号认证与工程数据持久化（JSON 文件）
+server/         Express 账号认证与工程数据持久化（sql.js / SQLite）
 scripts/        色卡抓取
 tests/          核心算法测试
 docs/           需求文档（冻结）、功能规格（活文档）、实现计划
 ```
 
-技术栈：TypeScript + React 18 + Vite 6、lucide-react、jsPDF（动态加载）、Express 4、Node `crypto`（scrypt + HMAC-SHA256 JWT）、Vitest。
+技术栈：TypeScript + React 18 + Vite 6、lucide-react、jsPDF（动态加载）、Express 4、sql.js（WASM SQLite，无原生编译）、Node `crypto`（scrypt + HMAC-SHA256 JWT）、Vitest。
 
 ## 约束与边界
 
 - 完整版部署在 N150（端口 3002，`~/wedou`），产物不含 `node_modules`，由 `scripts/restart-n150.sh` 现场安装到 `~/wedou-deps` 并软链接回来；该脚本用 `flock` 串行化且后台进程带 `9>&-`，避免死锁阻塞全局部署队列。
 - 静态版由 `.github/workflows/deploy.yml` 构建（`VITE_STATIC_MODE=1`、`--base /WeDou/`）。
 - 不含第三方登录、付费与社区图纸库。
-- 账号数据落在 `server/data/`（已 gitignore），仅适用于本地/单机运行。
-- AI 去背景首次使用需从 CDN 下载约 40MB 模型；无网络或设备不支持时会提示并回退到手动擦除，不影响主链路。
+- 账号数据落在 `server/data/wedou.sqlite`（已 gitignore，受部署脚本的 `data` 排除规则保护）；每 6 小时自动快照到 `server/data/backups/`，保留最近 10 份。旧 JSON 数据首次启动会自动迁移。适合小团队自用，不是多实例高并发方案。
+- 忘记密码凭注册时的一次性恢复码（16 字符），服务端只存哈希，不引入邮件服务或第三方账号；重置成功后旧码作废并生成新码。
+- AI 去背景首次使用需从 CDN 下载约 40MB 模型；无网络或设备不支持时会提示并回退到手动擦除，不影响主链路。可用 `VITE_BG_MODULE_URL` / `VITE_BG_MODEL_BASE` 指向自托管的模块与模型目录，无需改代码。
 - 网格上限 200×200，原图超过 4000px 或 20MB 会先降采样。
 - jsPDF 内置字体不含中文，因此 PDF 内文字一律英文/数字/符号；文件名与界面仍是中文。

@@ -60,6 +60,7 @@ export default function ChartViewport({
       <div className="viewport-bar">
         <span className="eyebrow">
           {pattern.w}×{pattern.h} · 共 {pattern.w * pattern.h} 格 · 可滚动查看
+          {cell < 14 && !fit ? ' · 当前格子过小，放大后可看格内符号' : ''}
         </span>
         <div className="viewport-tools">
           <button className="btn small ghost" onClick={() => zoom(-1)} disabled={!fit && cell === CELL_STEPS[0]} title="缩小">

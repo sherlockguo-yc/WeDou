@@ -55,6 +55,15 @@ async function fetchPalette(source) {
     throw new Error(`${source.id}: page declares ${declared}, expected ${source.expected}`);
   }
 
+  const hexCounts = new Map();
+  for (const color of byCode.values()) {
+    hexCounts.set(color.hex, (hexCounts.get(color.hex) ?? 0) + 1);
+  }
+  const duplicates = [...hexCounts.entries()].filter(([, count]) => count > 1);
+  if (duplicates.length > 0) {
+    console.warn(`  ${source.id}: ${duplicates.length} HEX shared by multiple codes (same colour)`);
+  }
+
   return {
     id: source.id,
     brand: source.brand,

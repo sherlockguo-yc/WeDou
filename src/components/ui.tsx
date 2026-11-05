@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Check, Info, Search, X } from 'lucide-react';
-import { getPalette } from '../core/palettes';
+import { duplicateCodes, getPalette } from '../core/palettes';
 
 export function Toggle({
   label,
@@ -119,6 +119,14 @@ export function ColorSearch({
 }) {
   const [query, setQuery] = useState('');
   const palette = getPalette(paletteId);
+  const duplicates = useMemo(() => duplicateCodes(paletteId), [paletteId]);
+  const sameColour = useMemo(() => {
+    const byCode = new Map<string, string[]>();
+    for (const codes of duplicates.values()) {
+      for (const code of codes) byCode.set(code, codes.filter((item) => item !== code));
+    }
+    return byCode;
+  }, [duplicates]);
   const needle = query.trim().toLowerCase();
   const matches = palette.colors.filter(
     (color) =>
@@ -140,18 +148,30 @@ export function ColorSearch({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
+      {duplicates.size > 0 ? (
+        <div className="eyebrow">
+          <AlertTriangle size={12} /> 该色板有 {duplicates.size} 组「同色不同号」，悬停色号可查看，避免买重豆
+        </div>
+      ) : null}
       <div className="color-search-results">
-        {matches.slice(0, 60).map((color) => (
-          <button
-            key={color.code}
-            className={`color-option${value === color.code ? ' selected' : ''}`}
-            onClick={() => onChange(color.code)}
-            title={`${color.name} ${color.hex}`}
-          >
-            <span className="color-swatch" style={{ background: color.hex }} />
-            {color.code}
-          </button>
-        ))}
+        {matches.slice(0, 60).map((color) => {
+          const peers = sameColour.get(color.code);
+          return (
+            <button
+              key={color.code}
+              className={`color-option${value === color.code ? ' selected' : ''}${peers ? ' duplicate' : ''}`}
+              onClick={() => onChange(color.code)}
+              title={
+                peers
+                  ? `${color.name} ${color.hex} — 与 ${peers.join('、')} 完全相同`
+                  : `${color.name} ${color.hex}`
+              }
+            >
+              <span className="color-swatch" style={{ background: color.hex }} />
+              {color.code}
+            </button>
+          );
+        })}
         {matches.length === 0 ? <span className="eyebrow">没有匹配的色号</span> : null}
       </div>
     </div>

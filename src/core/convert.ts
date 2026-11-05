@@ -141,6 +141,7 @@ export function quantizeGrid(
       const match = nearestColor(rgbToLab(sample), colors, cache);
       if (!match) continue;
       cells[index] = match.color.code;
+      if (match.deltaE > 10) approximated += 1;
       const chosen = hexToRgb(match.color.hex);
       const error: Rgb = {
         r: sample.r - chosen.r,

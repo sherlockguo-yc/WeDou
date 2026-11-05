@@ -370,6 +370,9 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
 }
 .color-option:hover { border-color: var(--accent); box-shadow: var(--shadow); }
 .color-option.selected { border-color: var(--bg-ink); background: var(--accent-warm); }
+.color-option.duplicate { border-style: dashed; }
+.color-search > .eyebrow { display: inline-flex; align-items: center; gap: var(--s1); color: var(--danger); }
+.color-search > .eyebrow svg { flex-shrink: 0; }
 .color-swatch { width: calc(var(--font-size) * 0.9); height: calc(var(--font-size) * 0.9); border: 1px solid var(--border-strong); border-radius: 2px; flex-shrink: 0; }
 
 /* ---------- tables ---------- */
@@ -431,6 +434,20 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
 .modal h2 { margin-bottom: var(--s3); }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--s2); margin-top: var(--s4); }
 .modal-error { color: var(--danger); font-family: var(--font-mono); font-size: calc(var(--font-size) * 0.72); margin-top: var(--s2); }
+
+.recovery-code {
+  font-family: var(--font-mono);
+  font-size: calc(var(--font-size) * 1.2);
+  letter-spacing: 0.08em;
+  padding: var(--s3);
+  margin: var(--s3) 0;
+  background: var(--bg-paper);
+  border: 2px dashed var(--accent-warm);
+  border-radius: var(--radius);
+  text-align: center;
+  word-break: break-all;
+  user-select: all;
+}
 
 .toast {
   position: fixed;

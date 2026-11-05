@@ -11,7 +11,7 @@ import { ConfirmModal, Toast } from './components/ui';
 import { quantizeGrid, sampleGrid } from './core/convert';
 import { optimizeGrid } from './core/optimize';
 import { createPattern, parsePattern, serialize, touch } from './core/pattern';
-import { DEFAULT_PALETTE_ID, PALETTES, getPalette } from './core/palettes';
+import { DEFAULT_PALETTE_ID, getPalette } from './core/palettes';
 import { removeBackground } from './core/segment';
 import type { SegmentProgress } from './core/segment';
 import { DEFAULT_PARAMS } from './core/types';
@@ -93,7 +93,8 @@ export default function App() {
   const [paletteId, setPaletteId] = useState(DEFAULT_PALETTE_ID);
   const [beadSize, setBeadSize] = useState<BeadSize>('5mm');
   const [tool, setTool] = useState<Tool>('brush');
-  const [activeCode, setActiveCode] = useState(PALETTES[0].colors[0].code);
+  const [activeCode, setActiveCode] = useState(getPalette(DEFAULT_PALETTE_ID).colors[0].code);
+  const [approximated, setApproximated] = useState(0);
   const [history, setHistory] = useState<History>({ past: [], future: [] });
   const [dirty, setDirty] = useState(false);
   const [segment, setSegment] = useState<SegmentProgress | null>(null);
@@ -173,6 +174,7 @@ export default function App() {
           next.progress = previous.progress.slice(0, w * h);
         }
         setPattern(next);
+        setApproximated(quantized.approximated);
         setStatus('ready');
         if (optimized.mergedCodes.length > 0) {
           notify(`已把 ${optimized.mergedCodes.length} 个稀有色号合并到最接近的常用色`);
@@ -604,6 +606,7 @@ export default function App() {
             beadSize={beadSize}
             segment={segment}
             segmentApplied={segmentApplied}
+            approximated={approximated}
             canUndo={history.past.length > 0}
             canRedo={history.future.length > 0}
             tool={tool}
