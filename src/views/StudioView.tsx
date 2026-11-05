@@ -255,6 +255,12 @@ export default function StudioView(props: StudioProps) {
           />
           <Toggle label="去掉孤立单颗豆" hint="减少难拼的杂点" checked={props.params.removeIsolated} onChange={(value) => props.onParam({ removeIsolated: value })} />
           <Toggle label="合并小色块" checked={props.params.mergeSmallRegions} onChange={(value) => props.onParam({ mergeSmallRegions: value })} />
+          <Toggle
+            label="保留细线细节"
+            hint="眼睛、发丝、描边这类面积小但对比强的部分优先保留；照片噪点多时可关掉"
+            checked={props.params.detailPreserve !== false}
+            onChange={(value) => props.onParam({ detailPreserve: value })}
+          />
           <Toggle label="色彩抖动" hint="渐变更细腻，但会产生更多杂点" checked={props.params.dithering} onChange={(value) => props.onParam({ dithering: value })} />
           <button className="btn primary" style={{ width: '100%', marginTop: 'var(--s2)' }} onClick={props.onRegenerate} disabled={!props.hasSource || busy}>
             {props.generated ? <RotateCcw size={15} /> : <LayoutGrid size={15} />}

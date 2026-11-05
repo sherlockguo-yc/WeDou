@@ -328,3 +328,102 @@ describe('background detection', () => {
     expect(cells.every((code) => code !== null)).toBe(true);
   });
 });
+
+describe('detail preservation', () => {
+  const paletteId = 'mard-291';
+  const colors = getPalette(paletteId).colors;
+  const cache = getLabCache(paletteId);
+  const codeOf = (rgb: Rgb) =>
+    nearestColor(rgbToLab(bucketCenter(bucketKey(rgb.r, rgb.g, rgb.b))), colors, cache)?.color.code;
+  const light: Rgb = { r: 230, g: 230, b: 230 };
+  const dark: Rgb = { r: 20, g: 20, b: 20 };
+  const options = (detailPreserve: boolean) => ({
+    dithering: false,
+    ...noBackground,
+    detailPreserve,
+  });
+
+  it('keeps a high-contrast thin line that loses the popular vote', () => {
+    const image = paintedImage(6, 6, (_x, y) =>
+      y === 2 ? [dark.r, dark.g, dark.b, 255] : [light.r, light.g, light.b, 255],
+    );
+    expect(codeOf(dark)).not.toBe(codeOf(light));
+    const { cells } = quantizeImage(image, 1, 1, paletteId, options(true));
+    expect(cells).toEqual([codeOf(dark)]);
+  });
+
+  it('does not promote scattered contrast pixels that form no line or patch', () => {
+    const scattered = new Set(['0,0', '2,2', '4,4', '1,4', '3,1', '5,3']);
+    const image = paintedImage(6, 6, (x, y) =>
+      scattered.has(`${x},${y}`)
+        ? [dark.r, dark.g, dark.b, 255]
+        : [light.r, light.g, light.b, 255],
+    );
+    const { cells } = quantizeImage(image, 1, 1, paletteId, options(true));
+    expect(cells).toEqual([codeOf(light)]);
+  });
+
+  it('keeps a diagonal line, not just horizontal or vertical ones', () => {
+    const image = paintedImage(6, 6, (x, y) =>
+      x === y ? [dark.r, dark.g, dark.b, 255] : [light.r, light.g, light.b, 255],
+    );
+    const { cells } = quantizeImage(image, 1, 1, paletteId, options(true));
+    expect(cells).toEqual([codeOf(dark)]);
+  });
+
+  it('ignores an isolated noise pixel', () => {
+    const image = paintedImage(6, 6, (x, y) =>
+      x === 0 && y === 0
+        ? [dark.r, dark.g, dark.b, 255]
+        : [light.r, light.g, light.b, 255],
+    );
+    const { cells } = quantizeImage(image, 1, 1, paletteId, options(true));
+    expect(cells).toEqual([codeOf(light)]);
+  });
+
+  it('does not override an almost equal split', () => {
+    const image = paintedImage(6, 6, (_x, y) =>
+      y < 3 ? [light.r, light.g, light.b, 255] : [dark.r, dark.g, dark.b, 255],
+    );
+    const { cells } = quantizeImage(image, 1, 1, paletteId, options(true));
+    expect(cells).toEqual([codeOf(light)]);
+  });
+
+  it('falls back to the plain majority vote when switched off', () => {
+    const image = paintedImage(6, 6, (_x, y) =>
+      y === 2 ? [dark.r, dark.g, dark.b, 255] : [light.r, light.g, light.b, 255],
+    );
+    const { cells } = quantizeImage(image, 1, 1, paletteId, options(false));
+    expect(cells).toEqual([codeOf(light)]);
+  });
+
+  it('leaves solid cells and the dithering path untouched', () => {
+    const solid = solidImage(4, 4, [light.r, light.g, light.b, 255]);
+    const plain = quantizeImage(solid, 2, 2, paletteId, options(true));
+    const dither = quantizeImage(solid, 2, 2, paletteId, { ...options(true), dithering: true });
+    expect(plain.cells.every((code) => code === codeOf(light))).toBe(true);
+    expect(dither.cells.every((code) => !code || validCodes().has(code))).toBe(true);
+  });
+
+  it('suppresses a one-off detail cell with no neighbouring detail cells', () => {
+    const image = paintedImage(12, 12, (x, y) =>
+      x >= 4 && x < 8 && y === 5
+        ? [dark.r, dark.g, dark.b, 255]
+        : [light.r, light.g, light.b, 255],
+    );
+    const { cells } = quantizeImage(image, 3, 3, paletteId, options(true));
+    expect(cells[4]).toBe(codeOf(light));
+  });
+
+  it('keeps detail cells that line up across neighbours', () => {
+    const image = paintedImage(12, 12, (_x, y) =>
+      y === 5 ? [dark.r, dark.g, dark.b, 255] : [light.r, light.g, light.b, 255],
+    );
+    const { cells } = quantizeImage(image, 3, 3, paletteId, options(true));
+    expect([cells[3], cells[4], cells[5]].every((code) => code === codeOf(dark))).toBe(true);
+  });
+
+  function validCodes() {
+    return new Set(getPalette(paletteId).colors.map((color) => color.code));
+  }
+});

@@ -44,6 +44,8 @@ export interface ConvertParams {
   mergeSmallRegions: boolean;
   transparentAsEmpty: boolean;
   backgroundTolerance: number;
+  /** Optional so project files saved before this feature still load; undefined means on. */
+  detailPreserve?: boolean;
 }
 
 /** Opt-in strength for flat-background removal; 0 means never guess a background. */
@@ -58,6 +60,7 @@ export const DEFAULT_PARAMS: ConvertParams = {
   mergeSmallRegions: true,
   transparentAsEmpty: true,
   backgroundTolerance: 0,
+  detailPreserve: true,
 };
 
 export interface Pattern {
