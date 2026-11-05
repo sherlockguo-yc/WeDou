@@ -433,7 +433,28 @@ button.table-row.is-button:focus-visible { outline: 2px solid var(--accent); out
 .library .table-head, .library .table-row {
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1fr);
 }
-.library .table-row:hover { background: #f2ecdc; }
+/* One calm highlight per row; the name is an inline link, not a floating button. */
+.library .table-row { transition: background 0.15s ease, box-shadow 0.15s ease; }
+.library .table-row:hover {
+  background: rgba(232, 180, 74, 0.16); /* --accent-warm, softened */
+  box-shadow: inset calc(var(--font-size) * 0.125) 0 0 var(--accent);
+}
+.library .table-row .table-cell.btn.ghost {
+  appearance: none;
+  border: 0;
+  background: transparent;
+}
+.library .table-row .table-cell.btn.ghost:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: transparent;
+  box-shadow: none;
+  transform: none;
+}
+.library .table-row .table-cell.btn.ghost:hover span {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
 .empty-state { display: grid; justify-items: center; gap: var(--s2); padding: var(--s5) var(--s3); text-align: center; color: var(--text-dim); }
 .empty-state svg { color: var(--accent); }
 .pending-preview {
