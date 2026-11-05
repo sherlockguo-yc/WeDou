@@ -107,16 +107,10 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
         const y = top + r * CELL;
         const hex = code ? getColor(pattern.paletteId, code)?.hex ?? '#FFFFFF' : '#EDE8DC';
         doc.setFillColor(...rgb(hex));
-        doc.setDrawColor(180, 176, 164);
-        doc.setLineWidth(0.1);
+        doc.setDrawColor(150, 155, 145);
+        doc.setLineWidth(0.15);
         doc.rect(x, y, CELL, CELL, 'FD');
-        if (code) {
-          const [ir, ig, ib] = inkFor(hex);
-          doc.setTextColor(ir, ig, ib);
-          doc.setFont('courier', 'bold');
-          doc.setFontSize(code.length >= 4 ? 3.6 : 4);
-          doc.text(code, x + CELL / 2, y + CELL / 2 + 1.4, { align: 'center' });
-        } else {
+        if (!code) {
           doc.setDrawColor(201, 195, 180);
           doc.setFillColor(201, 195, 180);
           doc.circle(x + CELL / 2, y + CELL / 2, 0.35, 'F');
@@ -124,8 +118,46 @@ export async function exportPatternPdf(pattern: Pattern, filename: string): Prom
       }
     }
 
-    doc.setDrawColor(90, 100, 90);
-    doc.setLineWidth(0.45);
+    // Dashed X inside each 5x5 block, aligned to the same global boundaries.
+    doc.setLineDashPattern([1.4, 1], 0);
+    doc.setDrawColor(140, 150, 140);
+    doc.setLineWidth(0.28);
+    for (let c = 0; c < columns; c += 1) {
+      if ((board.c0 + c) % GRID_BLOCK !== 0) continue;
+      for (let r = 0; r < rowCount; r += 1) {
+        if ((board.r0 + r) % GRID_BLOCK !== 0) continue;
+        const x = left + c * CELL;
+        const y = top + r * CELL;
+        const bw = Math.min(GRID_BLOCK, columns - c) * CELL;
+        const bh = Math.min(GRID_BLOCK, rowCount - r) * CELL;
+        doc.line(x, y, x + bw, y + bh);
+        doc.line(x + bw, y, x, y + bh);
+      }
+    }
+    doc.setLineDashPattern([], 0);
+
+    // Pass 3: colour codes above the dashes, on a patch of the cell's own colour
+    // so the diagonals never strike through the text.
+    for (let r = 0; r < rowCount; r += 1) {
+      for (let c = 0; c < columns; c += 1) {
+        const code = board.cells[r * columns + c];
+        if (!code) continue;
+        const hex = getColor(pattern.paletteId, code)?.hex ?? '#FFFFFF';
+        const x = left + c * CELL;
+        const y = top + r * CELL;
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(code.length >= 4 ? 4.2 : 4.8);
+        const textWidth = doc.getTextWidth(code);
+        doc.setFillColor(...rgb(hex));
+        doc.rect(x + CELL / 2 - textWidth / 2 - 0.4, y + CELL / 2 - 1.1, textWidth + 0.8, 2.2, 'F');
+        const [ir, ig, ib] = inkFor(hex);
+        doc.setTextColor(ir, ig, ib);
+        doc.text(code, x + CELL / 2, y + CELL / 2 + 1.6, { align: 'center' });
+      }
+    }
+
+    doc.setDrawColor(34, 59, 50);
+    doc.setLineWidth(0.8);
     for (let c = 0; c <= columns; c += 1) {
       if ((board.c0 + c) % GRID_BLOCK !== 0) continue;
       const x = left + c * CELL;

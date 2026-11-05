@@ -3,8 +3,8 @@ import { patternStats, usageRows } from '../core/stats';
 import { getPalette } from '../core/palettes';
 import type { Pattern } from '../core/types';
 
-const CELL = 26;
-const FOOTER_ROW = 30;
+const CELL = 32;
+const FOOTER_ROW = 36;
 const FOOTER_TOP = 16;
 const CHART_TOP = 80;
 const TABLE_GAP = 24;
