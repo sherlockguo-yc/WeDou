@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nearestColor, rgbToLab } from '../src/core/color';
-import { bucketCenter, bucketKey, quantizeGrid, quantizeImage, sampleGrid } from '../src/core/convert';
+import { bucketCenter, bucketKey, quantizeGrid, quantizeImage, sampleCells, sampleGrid } from '../src/core/convert';
 import { limitColors, removeIsolated } from '../src/core/optimize';
 import { createPattern } from '../src/core/pattern';
 import { getLabCache, getPalette } from '../src/core/palettes';
@@ -252,5 +252,79 @@ describe('voting by bead code', () => {
     const back = quantizeImage(image, 3, 3, paletteId, options).cells;
     expect(second).toEqual(first);
     expect(back).toEqual(first);
+  });
+});
+
+describe('background detection', () => {
+  const enabled = { transparentAsEmpty: true, backgroundTolerance: 18 };
+
+  it('never removes opaque pixels when background detection is off', () => {
+    const image = paintedImage(8, 8, (_x, y) => {
+      const v = 58 + Math.round((y * 113) / 7);
+      return [v, v, v, 255];
+    });
+    const cells = sampleCells(image, 4, 4, { ...enabled, backgroundTolerance: 0 });
+    expect(cells.every((cell) => !cell.empty)).toBe(true);
+  });
+
+  it('does not guess a background from a gradient', () => {
+    const image = paintedImage(8, 8, (_x, y) => {
+      const v = 58 + Math.round((y * 113) / 7);
+      return [v, v, v, 255];
+    });
+    const cells = sampleCells(image, 4, 4, enabled);
+    expect(cells.filter((cell) => cell.empty)).toHaveLength(0);
+  });
+
+  it('keeps a flat background empty but preserves the subject', () => {
+    const image = paintedImage(10, 10, (x, y) => {
+      const cx = Math.floor(x / 2);
+      const cy = Math.floor(y / 2);
+      if (cx >= 1 && cx <= 3 && cy >= 1 && cy <= 3) {
+        return cx === 2 && cy === 2 ? [250, 250, 250, 255] : [20, 20, 20, 255];
+      }
+      return [250, 250, 250, 255];
+    });
+    const cells = sampleCells(image, 5, 5, enabled);
+    expect(cells[0].empty).toBe(true);
+    expect(cells[4].empty).toBe(true);
+    expect(cells[12].empty).toBe(false);
+  });
+
+  it('keeps a background-coloured region that is enclosed by the subject', () => {
+    const image = paintedImage(10, 10, (x, y) => {
+      const cx = Math.floor(x / 2);
+      const cy = Math.floor(y / 2);
+      if (cx >= 1 && cx <= 3 && cy >= 1 && cy <= 3) {
+        return cx === 2 && cy === 2 ? [250, 250, 250, 255] : [20, 20, 20, 255];
+      }
+      return [250, 250, 250, 255];
+    });
+    const cells = sampleCells(image, 5, 5, enabled);
+    expect(cells[2 * 5 + 2].backgroundEmpty).toBe(false);
+    expect(cells[2 * 5 + 2].empty).toBe(false);
+    expect(cells[0].backgroundEmpty).toBe(true);
+  });
+
+  it('still treats alpha-transparent pixels as empty in both paths', () => {
+    const image = paintedImage(4, 4, (x) => (x < 2 ? [250, 250, 250, 0] : [20, 20, 20, 255]));
+    const options = { dithering: false, ...noBackground };
+    for (const dithering of [false, true]) {
+      const { cells } = quantizeImage(image, 2, 2, 'mard-291', { ...options, dithering });
+      expect(cells.map((code) => code === null)).toEqual([true, false, true, false]);
+    }
+  });
+
+  it('produces no empty cells for a gradient under the default settings', () => {
+    const image = paintedImage(8, 8, (_x, y) => {
+      const v = 58 + Math.round((y * 113) / 7);
+      return [v, v, v, 255];
+    });
+    const { cells } = quantizeImage(image, 4, 4, 'mard-291', {
+      dithering: false,
+      transparentAsEmpty: true,
+      backgroundTolerance: 0,
+    });
+    expect(cells.every((code) => code !== null)).toBe(true);
   });
 });

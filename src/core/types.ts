@@ -46,6 +46,9 @@ export interface ConvertParams {
   backgroundTolerance: number;
 }
 
+/** Opt-in strength for flat-background removal; 0 means never guess a background. */
+export const DEFAULT_BACKGROUND_TOLERANCE = 18;
+
 export const DEFAULT_PARAMS: ConvertParams = {
   width: 29,
   height: 29,
@@ -54,7 +57,7 @@ export const DEFAULT_PARAMS: ConvertParams = {
   removeIsolated: true,
   mergeSmallRegions: true,
   transparentAsEmpty: true,
-  backgroundTolerance: 18,
+  backgroundTolerance: 0,
 };
 
 export interface Pattern {

@@ -24,6 +24,7 @@ import { ColorSearch, Notice, Toggle } from '../components/ui';
 import { PALETTES, getPalette } from '../core/palettes';
 import { patternStats } from '../core/stats';
 import type { SegmentProgress } from '../core/segment';
+import { DEFAULT_BACKGROUND_TOLERANCE } from '../core/types';
 import type { BeadSize, ConvertParams, Pattern } from '../core/types';
 
 export type Tool = 'brush' | 'eraser' | 'picker';
@@ -246,6 +247,12 @@ export default function StudioView(props: StudioProps) {
             disabled={!props.ratioLabel}
           />
           <Toggle label="透明区留空" hint="不放豆，不等于白色" checked={props.params.transparentAsEmpty} onChange={(value) => props.onParam({ transparentAsEmpty: value })} />
+          <Toggle
+            label="自动抠纯色背景"
+            hint="只删四角同色、且连到画面边缘的背景；渐变与主体内部不会误删"
+            checked={props.params.backgroundTolerance > 0}
+            onChange={(value) => props.onParam({ backgroundTolerance: value ? DEFAULT_BACKGROUND_TOLERANCE : 0 })}
+          />
           <Toggle label="去掉孤立单颗豆" hint="减少难拼的杂点" checked={props.params.removeIsolated} onChange={(value) => props.onParam({ removeIsolated: value })} />
           <Toggle label="合并小色块" checked={props.params.mergeSmallRegions} onChange={(value) => props.onParam({ mergeSmallRegions: value })} />
           <Toggle label="色彩抖动" hint="渐变更细腻，但会产生更多杂点" checked={props.params.dithering} onChange={(value) => props.onParam({ dithering: value })} />

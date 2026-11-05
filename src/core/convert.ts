@@ -46,7 +46,12 @@ function cachedMatch(
 
 const distance = (a: Rgb, b: Rgb) => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
 
-function cornerBackground(image: ImageLike): Rgb | null {
+/**
+ * Only a *flat* background can be inferred from the corners. Averaging four
+ * different corner colours (e.g. a top-dark / bottom-light gradient) produces
+ * a mid-grey that also occurs inside the subject, which must never be deleted.
+ */
+function flatCornerBackground(image: ImageLike, limit: number): Rgb | null {
   const { data, width, height } = image;
   const points = [
     0,
@@ -54,29 +59,107 @@ function cornerBackground(image: ImageLike): Rgb | null {
     (height - 1) * width * 4,
     ((height - 1) * width + width - 1) * 4,
   ];
-  const total: Rgb = { r: 0, g: 0, b: 0 };
-  let opaque = 0;
+  const corners: Rgb[] = [];
   for (const offset of points) {
     if (data[offset + 3] < 128) continue;
-    total.r += data[offset];
-    total.g += data[offset + 1];
-    total.b += data[offset + 2];
-    opaque += 1;
+    corners.push({ r: data[offset], g: data[offset + 1], b: data[offset + 2] });
   }
-  if (opaque === 0) return null;
-  return { r: total.r / opaque, g: total.g / opaque, b: total.b / opaque };
+  if (corners.length === 0) return null;
+  for (const corner of corners) {
+    if (distance(corner, corners[0]) >= limit) return null;
+  }
+  const total = corners.reduce(
+    (sum, corner) => ({ r: sum.r + corner.r, g: sum.g + corner.g, b: sum.b + corner.b }),
+    { r: 0, g: 0, b: 0 },
+  );
+  return {
+    r: total.r / corners.length,
+    g: total.g / corners.length,
+    b: total.b / corners.length,
+  };
+}
+
+/** Mode of a coarse colour histogram; shared by the RGB path and background detection. */
+function modeColor(pixels: Rgb[]): Rgb | null {
+  const buckets = new Map<number, { count: number; sum: Rgb }>();
+  for (const pixel of pixels) {
+    const key = bucketKey(pixel.r, pixel.g, pixel.b);
+    const entry = buckets.get(key) ?? { count: 0, sum: { r: 0, g: 0, b: 0 } };
+    entry.count += 1;
+    entry.sum.r += pixel.r;
+    entry.sum.g += pixel.g;
+    entry.sum.b += pixel.b;
+    buckets.set(key, entry);
+  }
+  const winner = [...buckets.values()].reduce<{ count: number; sum: Rgb } | null>(
+    (best, entry) => (!best || entry.count > best.count ? entry : best),
+    null,
+  );
+  if (!winner) return null;
+  return {
+    r: Math.round(winner.sum.r / winner.count),
+    g: Math.round(winner.sum.g / winner.count),
+    b: Math.round(winner.sum.b / winner.count),
+  };
+}
+
+/**
+ * A background is a region *connected to the picture edge*, not merely a colour.
+ * Flood from the border through cells that look like the flat corner colour, so
+ * a background-coloured patch enclosed by the subject survives.
+ */
+function markBackgroundCells(
+  cells: CellSamples[],
+  w: number,
+  h: number,
+  background: Rgb,
+  limit: number,
+): void {
+  const seen = new Uint8Array(cells.length);
+  const queue: number[] = [];
+  const enqueue = (index: number) => {
+    if (!seen[index]) queue.push(index);
+  };
+  for (let x = 0; x < w; x += 1) {
+    enqueue(x);
+    enqueue((h - 1) * w + x);
+  }
+  for (let y = 0; y < h; y += 1) {
+    enqueue(y * w);
+    enqueue(y * w + w - 1);
+  }
+  for (let head = 0; head < queue.length; head += 1) {
+    const index = queue[head];
+    if (seen[index]) continue;
+    seen[index] = 1;
+    const cell = cells[index];
+    // Transparent cells are already empty; let the flood pass through them.
+    if (cell.pixels.length > 0) {
+      const representative = modeColor(cell.pixels);
+      if (!representative || distance(representative, background) >= limit) continue;
+      cell.backgroundEmpty = true;
+    }
+    const x = index % w;
+    const y = Math.floor(index / w);
+    if (x > 0) enqueue(index - 1);
+    if (x < w - 1) enqueue(index + 1);
+    if (y > 0) enqueue(index - w);
+    if (y < h - 1) enqueue(index + w);
+  }
 }
 
 export interface CellSamples {
   pixels: Rgb[];
   considered: number;
-  skipped: number;
+  transparent: number;
+  backgroundEmpty: boolean;
   empty: boolean;
 }
 
 /**
- * The single definition of "which pixels belong to a cell and which ones count".
- * Both quantisation paths read this, so transparency/background rules cannot drift apart.
+ * The single definition of "which pixels belong to a cell". Transparency is a
+ * physical fact about a pixel; being background is a spatial decision about a
+ * cell. Keeping them separate stops a colour match from deleting the subject.
  */
 export function sampleCells(
   image: ImageLike,
@@ -85,8 +168,11 @@ export function sampleCells(
   params: Pick<ConvertParams, 'transparentAsEmpty' | 'backgroundTolerance'>,
 ): CellSamples[] {
   const { data, width, height } = image;
-  const background = params.backgroundTolerance > 0 ? cornerBackground(image) : null;
   const backgroundLimit = params.backgroundTolerance * 2.5;
+  const background =
+    params.backgroundTolerance > 0 && params.transparentAsEmpty
+      ? flatCornerBackground(image, backgroundLimit)
+      : null;
   const cells: CellSamples[] = [];
 
   for (let gy = 0; gy < h; gy += 1) {
@@ -99,33 +185,35 @@ export function sampleCells(
 
       const pixels: Rgb[] = [];
       let considered = 0;
-      let skipped = 0;
+      let transparent = 0;
       for (let y = y0; y < y1; y += step) {
         for (let x = x0; x < x1; x += step) {
           const offset = (y * width + x) * 4;
           considered += 1;
           if (data[offset + 3] < 128) {
-            if (params.transparentAsEmpty) skipped += 1;
+            transparent += 1;
             continue;
           }
-          const pixel: Rgb = { r: data[offset], g: data[offset + 1], b: data[offset + 2] };
-          if (background && distance(pixel, background) < backgroundLimit) {
-            if (params.transparentAsEmpty) skipped += 1;
-            continue;
-          }
-          pixels.push(pixel);
+          pixels.push({ r: data[offset], g: data[offset + 1], b: data[offset + 2] });
         }
       }
 
-      // Preserve the original behaviour: a cell without usable pixels is empty in
-      // both modes, while the >60% rule only applies when "transparent as empty" is on.
-      const empty =
+      const transparentEmpty =
         considered === 0 ||
-        (params.transparentAsEmpty && skipped / considered > 0.6) ||
+        (params.transparentAsEmpty && transparent / considered > 0.6) ||
         pixels.length === 0;
-      cells.push({ pixels, considered, skipped, empty });
+      cells.push({
+        pixels,
+        considered,
+        transparent,
+        backgroundEmpty: false,
+        empty: transparentEmpty,
+      });
     }
   }
+
+  if (background) markBackgroundCells(cells, w, h, background, backgroundLimit);
+  for (const cell of cells) cell.empty = cell.empty || cell.backgroundEmpty;
   return cells;
 }
 
@@ -136,29 +224,9 @@ export function sampleGrid(
   h: number,
   params: Pick<ConvertParams, 'transparentAsEmpty' | 'backgroundTolerance'>,
 ): (Rgb | null)[] {
-  return sampleCells(image, w, h, params).map((cell) => {
-    if (cell.empty) return null;
-    const buckets = new Map<number, { count: number; sum: Rgb }>();
-    for (const pixel of cell.pixels) {
-      const key = bucketKey(pixel.r, pixel.g, pixel.b);
-      const entry = buckets.get(key) ?? { count: 0, sum: { r: 0, g: 0, b: 0 } };
-      entry.count += 1;
-      entry.sum.r += pixel.r;
-      entry.sum.g += pixel.g;
-      entry.sum.b += pixel.b;
-      buckets.set(key, entry);
-    }
-    const winner = [...buckets.values()].reduce<{ count: number; sum: Rgb } | null>(
-      (best, entry) => (!best || entry.count > best.count ? entry : best),
-      null,
-    );
-    if (!winner) return null;
-    return {
-      r: Math.round(winner.sum.r / winner.count),
-      g: Math.round(winner.sum.g / winner.count),
-      b: Math.round(winner.sum.b / winner.count),
-    };
-  });
+  return sampleCells(image, w, h, params).map((cell) =>
+    cell.empty ? null : modeColor(cell.pixels),
+  );
 }
 
 export interface QuantizeResult {
