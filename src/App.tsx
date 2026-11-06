@@ -767,7 +767,7 @@ export default function App() {
     notify('已打开图纸。工程文件不含原图，调整参数需重新上传图片');
   };
 
-  const deletePattern = async (id: string) => {
+  const removePattern = async (id: string) => {
     const next = readDrafts().filter((item) => item.id !== id);
     writeDrafts(next);
     setDrafts(next);
@@ -780,6 +780,19 @@ export default function App() {
       }
     }
     notify('已删除');
+  };
+
+  /** Deleting is irreversible, so always ask before removing local and cloud copies. */
+  const deletePattern = (id: string) => {
+    const target = mergedLibrary(drafts, cloud).find((item) => item.id === id);
+    const name = target?.name?.trim() || '这张图纸';
+    setConfirm({
+      message: `确定要删除「${name}」吗？本地草稿和云端图纸都会被移除，且无法恢复。`,
+      onConfirm: () => {
+        setConfirm(null);
+        void removePattern(id);
+      },
+    });
   };
 
   const duplicatePattern = async (id: string) => {
