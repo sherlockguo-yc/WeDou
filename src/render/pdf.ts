@@ -9,6 +9,25 @@ const PAGE_H = 297;
 const MARGIN = 12;
 const CELL = 6.4; // 29 * 6.4 = 185.6mm, fits A4 and keeps symbols legible
 
+/** Corner map: how many 29x29 boards make up the whole chart, in columns and rows. */
+export function assemblyMapLayout(cols: number, rows: number): {
+  unit: number;
+  gap: number;
+  width: number;
+  height: number;
+} {
+  const safeCols = Math.max(1, Math.floor(cols));
+  const safeRows = Math.max(1, Math.floor(rows));
+  const gap = 0.5;
+  const unit = Math.min(3.4, 13 / Math.max(safeCols, safeRows));
+  return {
+    unit,
+    gap,
+    width: safeCols * unit + (safeCols - 1) * gap,
+    height: safeRows * unit + (safeRows - 1) * gap,
+  };
+}
+
 function rgb(hex: string): [number, number, number] {
   const value = Number.parseInt(hex.replace('#', ''), 16);
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
@@ -67,6 +86,9 @@ export async function exportPatternPdf(
     ? clampBoardRange(allBoards.length, range.from, range.to)
     : { from: 1, to: allBoards.length };
   const boards = allBoards.slice(selected.from - 1, selected.to);
+  const boardCols = Math.max(...allBoards.map((item) => item.col)) + 1;
+  const boardRows = Math.max(...allBoards.map((item) => item.row)) + 1;
+  const map = assemblyMapLayout(boardCols, boardRows);
 
   boards.forEach((board, pageIndex) => {
     if (pageIndex > 0) doc.addPage();
@@ -89,6 +111,38 @@ export async function exportPatternPdf(
       MARGIN,
       20,
     );
+
+    // Assembly map: every board of the whole chart, with this page highlighted.
+    if (allBoards.length > 1) {
+      const x0 = PAGE_W - MARGIN - map.width;
+      const y0 = 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.5);
+      doc.setTextColor(107, 115, 105);
+      doc.text(
+        `ASSEMBLY MAP ${boardCols}x${boardRows}  |  THIS PAGE ${board.index + 1}`,
+        PAGE_W - MARGIN,
+        y0 - 1.5,
+        { align: 'right' },
+      );
+      for (const item of allBoards) {
+        const x = x0 + item.col * (map.unit + map.gap);
+        const y = y0 + item.row * (map.unit + map.gap);
+        const current = item.index === board.index;
+        if (current) doc.setFillColor(217, 107, 85);
+        else doc.setFillColor(247, 243, 232);
+        doc.setDrawColor(34, 59, 50);
+        doc.setLineWidth(0.2);
+        doc.rect(x, y, map.unit, map.unit, 'FD');
+        if (map.unit >= 2.8) {
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(5);
+          if (current) doc.setTextColor(255, 255, 255);
+          else doc.setTextColor(34, 59, 50);
+          doc.text(String(item.index + 1), x + map.unit / 2, y + map.unit / 2 + 0.9, { align: 'center' });
+        }
+      }
+    }
 
     const left = MARGIN + 8;
     const top = 27;

@@ -66,7 +66,7 @@ export interface StudioProps {
   onRedo: () => void;
   onExportPdf: () => void;
   onExportPdfRange: (from: number, to: number) => void;
-  onReplaceCode: (from: string, to: string) => void;
+  onReplaceCode: (from: string, to: string | null) => void;
   onExportPng: () => void;
   onExportJson: () => void;
   onOpenGuide: () => void;
@@ -425,8 +425,20 @@ export default function StudioView(props: StudioProps) {
         )}
       </div>
       {replaceOpen && source ? (
-        <Modal title={`把 ${source} 全部换成另一种颜色`} onClose={() => setReplaceOpen(false)}>
-          <p>把图纸里所有 <span className="mono">{source}</span> 的豆子换成目标色号，替换后可用「撤销」一次还原。</p>
+        <Modal title={`替换色号 ${source}`} onClose={() => setReplaceOpen(false)}>
+          <p>把图纸里所有 <span className="mono">{source}</span> 一次性换成另一种颜色，或直接留空；替换后可用「撤销」一次还原。</p>
+          <div className="tool-row">
+            <button
+              className="btn small ghost"
+              onClick={() => {
+                props.onReplaceCode(source, null);
+                setReplaceOpen(false);
+              }}
+            >
+              全部留空（不放豆）
+            </button>
+            <span className="eyebrow">或选一个色号替换</span>
+          </div>
           <ColorSearch paletteId={props.paletteId} value={replaceTarget} onChange={setReplaceTarget} />
           <div className="modal-actions">
             <button className="btn ghost" onClick={() => setReplaceOpen(false)}>取消</button>

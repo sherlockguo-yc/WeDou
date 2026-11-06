@@ -491,7 +491,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const replaceColour = (from: string, to: string) => {
+  const replaceColour = (from: string, to: string | null) => {
     const current = patternRef.current;
     if (!current || from === to) return;
     const result = replaceCodeCells(current.cells, from, to);
@@ -503,7 +503,9 @@ export default function App() {
     setHistory((state) => ({ past: [...state.past.slice(-49), current], future: [] }));
     setPattern(next);
     setDirty(true);
-    notify(`已把 ${from} 的 ${result.changed} 颗豆换成 ${to}`);
+    notify(to
+      ? `已把 ${from} 的 ${result.changed} 颗豆换成 ${to}`
+      : `已把 ${from} 的 ${result.changed} 颗豆全部留空`);
   };
 
   /* ---------- exports ---------- */

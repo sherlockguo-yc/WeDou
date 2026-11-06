@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { clampBoardRange } from '../src/core/boards';
 import { createPattern, replaceCode } from '../src/core/pattern';
 import { getPalette } from '../src/core/palettes';
+import { patternStats } from '../src/core/stats';
+import { assemblyMapLayout } from '../src/render/pdf';
 import type { Cell, Pattern } from '../src/core/types';
 import {
   cellFromPoint,
@@ -179,6 +181,20 @@ describe('chart rendering', () => {
   });
 });
 
+describe('PDF assembly map', () => {
+  it('stays in the top-right corner above the bead grid for 1 to 49 boards', () => {
+    for (const [cols, rows] of [[1, 1], [2, 1], [3, 3], [7, 7]] as const) {
+      const map = assemblyMapLayout(cols, rows);
+      expect(map.width).toBeGreaterThan(0);
+      expect(198 - map.width).toBeGreaterThan(150);
+      expect(8 + map.height).toBeLessThan(25);
+    }
+    expect(assemblyMapLayout(0, 0)).toEqual(assemblyMapLayout(1, 1));
+    expect(assemblyMapLayout(2, 1).unit).toBeGreaterThanOrEqual(2.8);
+    expect(assemblyMapLayout(7, 7).unit).toBeLessThan(2.8);
+  });
+});
+
 describe('suppression rules', () => {
   it('combines colour, board and completion while leaving empty cells alone', () => {
     const options: GridOptions = {
@@ -220,6 +236,19 @@ describe('export geometry and editing primitives', () => {
     expect(clampBoardRange(9, 7, 3)).toEqual({ from: 7, to: 7 });
     expect(clampBoardRange(9, Number.NaN, Number.POSITIVE_INFINITY)).toEqual({ from: 1, to: 9 });
     expect(clampBoardRange(1, 1, 1)).toEqual({ from: 1, to: 1 });
+  });
+
+  it('erasing a whole colour increases empty cells without breaking the stats', () => {
+    const original = chart();
+    const result = replaceCode(original.cells, A.code, null);
+    const next = { ...original, cells: result.cells };
+    const before = patternStats(original);
+    const after = patternStats(next);
+    expect(result.changed).toBeGreaterThan(0);
+    expect(after.emptyCells).toBe(before.emptyCells + result.changed);
+    expect(after.totalBeads).toBe(before.totalBeads - result.changed);
+    expect(next.cells).toHaveLength(original.cells.length);
+    expect(next.cells.every((cell) => cell === null || typeof cell === 'string')).toBe(true);
   });
 
   it('replaces every bead of one code without mutating the source grid', () => {
