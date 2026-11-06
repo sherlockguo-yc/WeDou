@@ -24,7 +24,7 @@ export interface ChartViewportProps {
   interactive?: boolean;
 }
 
-/** Shared chart viewport: native-size scrolling plus zoom, fit-to-window and fullscreen. */
+/** Shared chart viewport: full chart by default, then zoom / native scrolling for detail. */
 export default function ChartViewport({
   pattern,
   onCell,
@@ -36,7 +36,7 @@ export default function ChartViewport({
   interactive,
 }: ChartViewportProps) {
   const [cell, setCell] = useState(() => defaultCell(pattern.w));
-  const [fit, setFit] = useState(false);
+  const [fit, setFit] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
@@ -64,11 +64,11 @@ export default function ChartViewport({
     <div className={`chart-viewport${fullscreen ? ' is-fullscreen' : ''}`}>
       <div className="viewport-bar">
         <span className="eyebrow">
-          {pattern.w}×{pattern.h} · 共 {pattern.w * pattern.h} 格 · 可滚动查看
+          {pattern.w}×{pattern.h} · 共 {pattern.w * pattern.h} 格 · {fit ? '全图已适应窗口，放大可看细节' : '原生尺寸，可滚动查看'}
           {cell < 14 && !fit ? ' · 当前格子过小，放大后可看格内符号' : ''}
         </span>
         <div className="viewport-tools">
-          <button className="btn small ghost" onClick={() => zoom(-1)} disabled={!fit && cell === CELL_STEPS[0]} title="缩小">
+          <button className="btn small ghost" onClick={() => zoom(-1)} disabled={fit || cell === CELL_STEPS[0]} title={fit ? '已是完整全图' : '缩小'}>
             <ZoomOut size={14} />
           </button>
           <span className="viewport-scale mono">{fit ? '适应窗口' : `${cell}px/格`}</span>

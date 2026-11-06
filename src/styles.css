@@ -332,10 +332,17 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
   border-radius: var(--radius);
   background: var(--bg-paper);
 }
-/* Native size by default so large charts stay legible and scrollable. */
+/* Fit mode scales the whole chart into the viewport (both axes); native size is
+   used only after the user zooms in to inspect individual beads. */
 .chart-canvas { display: block; height: auto; image-rendering: pixelated; cursor: crosshair; }
 .chart-canvas.tool-active { cursor: cell; }
-.canvas-scroll.is-fit .chart-canvas { max-width: 100%; image-rendering: auto; }
+.canvas-scroll.is-fit .chart-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  image-rendering: auto;
+}
 
 /* Independent fullscreen view: fixed positioning lifts it out of the grid,
    and its own grid keeps the toolbar and canvas in one layout system. */
