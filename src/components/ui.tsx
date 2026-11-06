@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, Check, Info, Search, X } from 'lucide-react';
-import { duplicateCodes, getPalette } from '../core/palettes';
+import { AlertTriangle, Check, Info, Search, Sparkles, X } from 'lucide-react';
+import { beadNote, duplicateCodes, getPalette, specialCodeCount } from '../core/palettes';
 
 export function Toggle({
   label,
@@ -120,8 +120,10 @@ export function ColorSearch({
   onChange: (code: string) => void;
 }) {
   const [query, setQuery] = useState('');
+  useEffect(() => setQuery(''), [paletteId]);
   const palette = getPalette(paletteId);
   const duplicates = useMemo(() => duplicateCodes(paletteId), [paletteId]);
+  const specialCount = useMemo(() => specialCodeCount(paletteId), [paletteId]);
   const sameColour = useMemo(() => {
     const byCode = new Map<string, string[]>();
     for (const codes of duplicates.values()) {
@@ -155,22 +157,31 @@ export function ColorSearch({
           <AlertTriangle size={12} /> 该色板有 {duplicates.size} 组「同色不同号」，悬停色号可查看，避免买重豆
         </div>
       ) : null}
+      {specialCount > 0 ? (
+        <Notice>
+          该色板含 {specialCount} 个特效色号（温变 / 光变 / 珠光 / 果冻 / 夜光 / 透明），HEX 只代表其中一种状态。菱形图标标出特效豆，三角图标标出多来源色值差异较大的色号，请以实物色卡为准。
+        </Notice>
+      ) : null}
       <div className="color-search-results">
         {matches.slice(0, 60).map((color) => {
           const peers = sameColour.get(color.code);
+          const note = beadNote(paletteId, color.code);
+          const notes = [
+            peers ? `与 ${peers.join('、')} 完全相同` : '',
+            note.finish ? `特效豆：${note.finish}` : '',
+            note.disputedDeltaE ? `多来源色值差异 ΔE≈${note.disputedDeltaE}` : '',
+          ].filter(Boolean);
           return (
             <button
               key={color.code}
               className={`color-option${value === color.code ? ' selected' : ''}${peers ? ' duplicate' : ''}`}
               onClick={() => onChange(color.code)}
-              title={
-                peers
-                  ? `${color.name} ${color.hex} — 与 ${peers.join('、')} 完全相同`
-                  : `${color.name} ${color.hex}`
-              }
+              title={`${color.name} ${color.hex}${notes.length > 0 ? ` — ${notes.join('；')}` : ''}`}
             >
               <span className="color-swatch" style={{ background: color.hex }} />
               {color.code}
+              {note.finish ? <Sparkles size={12} style={{ flexShrink: 0 }} /> : null}
+              {note.disputedDeltaE ? <AlertTriangle size={12} style={{ flexShrink: 0 }} /> : null}
             </button>
           );
         })}

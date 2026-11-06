@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { deltaE00, hexToLab, hexToRgb, nearestColor } from '../src/core/color';
-import { DEFAULT_PALETTE_ID, PALETTES, duplicateCodes, getLabCache, getPalette } from '../src/core/palettes';
+import {
+  DEFAULT_PALETTE_ID,
+  PALETTES,
+  beadNote,
+  duplicateCodes,
+  getLabCache,
+  getPalette,
+  specialCodeCount,
+} from '../src/core/palettes';
 
 describe('colour conversion', () => {
   it('parses 6-digit hex', () => {
@@ -64,5 +72,30 @@ describe('palette matching', () => {
     expect(match).not.toBeNull();
     expect(match?.deltaE).toBeLessThan(30);
     expect(palette.colors.some((color) => color.code === match?.color.code)).toBe(true);
+  });
+});
+
+describe('palette data notes', () => {
+  it('flags exactly the 70 effect beads that MARD 291 adds to the 221 kit', () => {
+    expect(specialCodeCount('mard-291')).toBe(70);
+    expect(specialCodeCount('mard-221')).toBe(0);
+    expect(specialCodeCount('perler-117')).toBe(0);
+  });
+
+  it('describes the finish of an effect bead and leaves ordinary codes alone', () => {
+    expect(beadNote('mard-291', 'R13').finish).toContain('果冻');
+    expect(beadNote('mard-291', 'Q5').finish).toContain('温变');
+    expect(beadNote('mard-291', 'ZG1').finish).toContain('光变');
+    expect(beadNote('mard-291', 'H5').finish).toBeUndefined();
+    expect(beadNote('mard-221', 'H5').finish).toBeUndefined();
+    expect(beadNote('perler-117', 'P01').finish).toBeUndefined();
+  });
+
+  it('marks cross-source disputes on both MARD kits without changing colours', () => {
+    expect(beadNote('mard-291', 'Q5').disputedDeltaE).toBe(38.3);
+    expect(beadNote('mard-221', 'H16').disputedDeltaE).toBe(11.2);
+    expect(beadNote('mard-291', 'R13').disputedDeltaE).toBeUndefined();
+    expect(beadNote('perler-117', 'P01').disputedDeltaE).toBeUndefined();
+    expect(getPalette('mard-291').colors.find((color) => color.code === 'Q5')?.hex).toBe('#4F5E5B');
   });
 });
