@@ -3,7 +3,7 @@ import type { ConvertParams } from './types';
 
 export const PREFERENCES_KEY = 'wedou.toggle-preferences';
 
-/** The seven switches in "3 · 定图纸". Sizes and colour count belong to one image, not to a preference. */
+/** The eight switches in "3 · 定图纸". Sizes and colour count belong to one image, not to a preference. */
 export interface TogglePreferences {
   lockRatio: boolean;
   transparentAsEmpty: boolean;
@@ -12,6 +12,7 @@ export interface TogglePreferences {
   mergeSmallRegions: boolean;
   detailPreserve: boolean;
   dithering: boolean;
+  excludeSpecial: boolean;
 }
 
 /** Param keys that a user toggle can change; everything else in ConvertParams is per-image. */
@@ -22,6 +23,7 @@ export const TOGGLE_KEYS = [
   'mergeSmallRegions',
   'detailPreserve',
   'dithering',
+  'excludeSpecial',
 ] as const satisfies readonly (keyof ConvertParams)[];
 
 export function isTogglePatch(patch: Partial<ConvertParams>): boolean {
@@ -37,6 +39,7 @@ export function preferencesFromParams(params: ConvertParams, lockRatio: boolean)
     mergeSmallRegions: params.mergeSmallRegions,
     detailPreserve: params.detailPreserve !== false,
     dithering: params.dithering,
+    excludeSpecial: params.excludeSpecial !== false,
   };
 }
 
@@ -53,6 +56,7 @@ export function withTogglePreferences(
     mergeSmallRegions: preferences.mergeSmallRegions,
     detailPreserve: preferences.detailPreserve,
     dithering: preferences.dithering,
+    excludeSpecial: preferences.excludeSpecial,
   };
 }
 
@@ -101,6 +105,7 @@ export function readTogglePreferences(): TogglePreferences {
     mergeSmallRegions: bool('mergeSmallRegions'),
     detailPreserve: bool('detailPreserve'),
     dithering: bool('dithering'),
+    excludeSpecial: bool('excludeSpecial'),
   };
 }
 

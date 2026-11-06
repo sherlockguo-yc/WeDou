@@ -35,8 +35,8 @@ export default function UsageTable({
             <span className="table-cell">
               <span className="color-swatch" style={{ background: row.hex }} />
               <span className="mono">{row.code}</span>
-              {note.finish ? <Sparkles size={12} style={{ flexShrink: 0 }} /> : null}
-              {note.disputedDeltaE ? <AlertTriangle size={12} style={{ flexShrink: 0 }} /> : null}
+              {note.finish ? <Sparkles size={12} style={{ flexShrink: 0 }} aria-label="特效豆" /> : null}
+              {note.disputedDeltaE ? <AlertTriangle size={12} style={{ flexShrink: 0 }} aria-label="多来源色值差异" /> : null}
             </span>
             <span className="table-cell"><span className="mono">{row.hex}</span></span>
             <span className="num mono">{row.count}</span>

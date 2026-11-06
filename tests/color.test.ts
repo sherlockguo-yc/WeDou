@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deltaE00, hexToLab, hexToRgb, nearestColor } from '../src/core/color';
 import {
+  CROSS_SOURCE_DISPUTES,
   DEFAULT_PALETTE_ID,
   PALETTES,
   beadNote,
@@ -9,6 +10,16 @@ import {
   getPalette,
   specialCodeCount,
 } from '../src/core/palettes';
+import { quantizeImage } from '../src/core/convert';
+import type { ImageLike } from '../src/core/convert';
+import { DEFAULT_PARAMS } from '../src/core/types';
+import { exportNote } from '../src/render/png';
+
+function solid(width: number, height: number, rgb: [number, number, number]): ImageLike {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < width * height; i += 1) data.set([...rgb, 255], i * 4);
+  return { data, width, height };
+}
 
 describe('colour conversion', () => {
   it('parses 6-digit hex', () => {
@@ -97,5 +108,67 @@ describe('palette data notes', () => {
     expect(beadNote('mard-291', 'R13').disputedDeltaE).toBeUndefined();
     expect(beadNote('perler-117', 'P01').disputedDeltaE).toBeUndefined();
     expect(getPalette('mard-291').colors.find((color) => color.code === 'Q5')?.hex).toBe('#4F5E5B');
+  });
+});
+
+describe('palette data guard', () => {
+  it('keeps every disputed code present in a palette it annotates', () => {
+    const codes291 = new Set(getPalette('mard-291').colors.map((color) => color.code));
+    const codes221 = new Set(getPalette('mard-221').colors.map((color) => color.code));
+    for (const code of Object.keys(CROSS_SOURCE_DISPUTES)) {
+      expect(codes291.has(code) || codes221.has(code)).toBe(true);
+    }
+  });
+
+  it('matches the effect series exactly to the 70 codes MARD 291 adds', () => {
+    const base = new Set(getPalette('mard-221').colors.map((color) => color.code));
+    const extra = getPalette('mard-291').colors
+      .filter((color) => !base.has(color.code))
+      .map((color) => color.code);
+    expect(extra).toHaveLength(70);
+    expect(extra.every((code) => beadNote('mard-291', code).finish)).toBe(true);
+  });
+
+  it('defaults to MARD 221 with effect beads excluded', () => {
+    expect(DEFAULT_PALETTE_ID).toBe('mard-221');
+    expect(DEFAULT_PARAMS.excludeSpecial).toBe(true);
+  });
+});
+
+describe('effect bead exclusion', () => {
+  const special = solid(4, 4, [85, 81, 76]);
+  const base = {
+    dithering: false,
+    transparentAsEmpty: true,
+    backgroundTolerance: 0,
+    detailPreserve: false,
+  };
+  const options = (excludeSpecial: boolean) => ({ ...base, excludeSpecial });
+  const isPlain = (code: string | null) => Boolean(code) && !beadNote('mard-291', code as string).finish;
+
+  it('uses R13 only when the switch is off', () => {
+    const full = quantizeImage(special, 2, 2, 'mard-291', options(false));
+    const filtered = quantizeImage(special, 2, 2, 'mard-291', options(true));
+    expect(full.cells.every((code) => code === 'R13')).toBe(true);
+    expect(filtered.cells.every(isPlain)).toBe(true);
+  });
+
+  it('keeps filtered and full matches in separate caches', () => {
+    const full = quantizeImage(special, 2, 2, 'mard-291', options(false)).cells;
+    const filtered = quantizeImage(special, 2, 2, 'mard-291', options(true)).cells;
+    const again = quantizeImage(special, 2, 2, 'mard-291', options(false)).cells;
+    expect(again).toEqual(full);
+    expect(filtered).not.toEqual(full);
+  });
+
+  it('also excludes effect beads on the dithering path', () => {
+    const cells = quantizeImage(special, 2, 2, 'mard-291', { ...base, dithering: true, excludeSpecial: true }).cells;
+    expect(cells.every(isPlain)).toBe(true);
+  });
+
+  it('labels export rows without touching the colour values', () => {
+    expect(exportNote('mard-291', 'R13')).toBe('EFFECT');
+    expect(exportNote('mard-291', 'Q5')).toBe('EFFECT / DISPUTED');
+    expect(exportNote('mard-221', 'H5')).toBe('');
   });
 });

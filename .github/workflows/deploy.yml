@@ -26,6 +26,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Verify palette data against the live source
+        continue-on-error: true
+        run: npm run fetch:palettes -- --check
 
   deploy:
     needs: verify

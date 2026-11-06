@@ -127,7 +127,8 @@ function paintedImage(
 describe('cell sampling contract', () => {
   const paletteId = 'mard-291';
   const valid = () => new Set(getPalette(paletteId).colors.map((color) => color.code));
-  const params = (dithering: boolean) => ({ dithering, ...noBackground });
+  // These contracts describe full-palette matching; exclusion is covered separately.
+  const params = (dithering: boolean) => ({ dithering, excludeSpecial: false, ...noBackground });
 
   it('splits the image into cells without overlap or gaps', () => {
     const image = paintedImage(4, 4, (x) => (x < 2 ? [220, 30, 30, 255] : [30, 30, 220, 255]));
@@ -237,7 +238,7 @@ describe('voting by bead code', () => {
       return [rgb.r, rgb.g, rgb.b, 255] as [number, number, number, number];
     });
     const allowed = [codeOf(found.a), codeOf(found.b)];
-    const { cells } = quantizeImage(image, 1, 1, paletteId, { dithering: false, ...noBackground });
+    const { cells } = quantizeImage(image, 1, 1, paletteId, { dithering: false, excludeSpecial: false, ...noBackground });
     expect(allowed).toContain(cells[0]);
   });
 

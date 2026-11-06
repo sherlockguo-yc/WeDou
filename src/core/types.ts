@@ -46,6 +46,8 @@ export interface ConvertParams {
   backgroundTolerance: number;
   /** Optional so project files saved before this feature still load; undefined means on. */
   detailPreserve?: boolean;
+  /** Optional so older project files still load; undefined means on (effect beads are excluded). */
+  excludeSpecial?: boolean;
 }
 
 /** Opt-in strength for flat-background removal; 0 means never guess a background. */
@@ -61,6 +63,7 @@ export const DEFAULT_PARAMS: ConvertParams = {
   transparentAsEmpty: true,
   backgroundTolerance: 0,
   detailPreserve: true,
+  excludeSpecial: true,
 };
 
 export interface Pattern {

@@ -1,6 +1,6 @@
 import { deltaE00, hexToRgb, isApproximate, nearestColor, rgbToLab } from './color';
 import type { ColorMatch, LabCache } from './color';
-import { getLabCache, getPalette } from './palettes';
+import { effectivePaletteKey, usableColors, usableLabCache } from './palettes';
 import type { BeadColor, Cell, ConvertParams, Rgb } from './types';
 
 export interface ImageLike {
@@ -20,9 +20,10 @@ export const bucketCenter = (key: number): Rgb => ({
 });
 
 /**
- * A bucket always maps to the same code for a given palette. Caching it across
- * conversions makes parameter tweaks and palette switches cheap, and the cache
- * is naturally bounded by the 32^3 possible buckets.
+ * A bucket always maps to the same code for a given *effective* palette (full
+ * or with effect beads filtered out). Caching it across conversions makes
+ * parameter tweaks and palette switches cheap; the cache is bounded by 32^3
+ * buckets and keyed separately so the two colour sets never cross-contaminate.
  */
 const matchCacheByPalette = new Map<string, Map<number, ColorMatch>>();
 
@@ -260,11 +261,11 @@ export function quantizeGrid(
   w: number,
   h: number,
   paletteId: string,
-  params: Pick<ConvertParams, 'dithering'>,
+  params: Pick<ConvertParams, 'dithering' | 'excludeSpecial'>,
 ): QuantizeResult {
-  const palette = getPalette(paletteId);
-  const cache: LabCache = getLabCache(paletteId);
-  const colors: BeadColor[] = palette.colors;
+  const excludeSpecial = params.excludeSpecial !== false;
+  const cache: LabCache = usableLabCache(paletteId, excludeSpecial);
+  const colors: BeadColor[] = usableColors(paletteId, excludeSpecial);
   const cells: Cell[] = new Array<Cell>(w * h).fill(null);
   let approximated = 0;
 
@@ -429,10 +430,12 @@ export function quantizeByVote(
   w: number,
   h: number,
   paletteId: string,
-  params: Pick<ConvertParams, 'transparentAsEmpty' | 'backgroundTolerance' | 'detailPreserve'>,
+  params: Pick<ConvertParams, 'transparentAsEmpty' | 'backgroundTolerance' | 'detailPreserve' | 'excludeSpecial'>,
 ): QuantizeResult {
-  const colors: BeadColor[] = getPalette(paletteId).colors;
-  const cache: LabCache = getLabCache(paletteId);
+  const excludeSpecial = params.excludeSpecial !== false;
+  const colors: BeadColor[] = usableColors(paletteId, excludeSpecial);
+  const cache: LabCache = usableLabCache(paletteId, excludeSpecial);
+  const matchKey = effectivePaletteKey(paletteId, excludeSpecial);
   const detailPreserve = params.detailPreserve !== false;
   const sampled = sampleCells(image, w, h, params);
   const winners: Cell[] = new Array<Cell>(w * h).fill(null);
@@ -445,7 +448,7 @@ export function quantizeByVote(
     const votes = new Map<string, { count: number; deltaSum: number; points: CellPixel[] }>();
     for (const pixel of cell.pixels) {
       const key = bucketKey(pixel.rgb.r, pixel.rgb.g, pixel.rgb.b);
-      const match = cachedMatch(paletteId, key, colors, cache);
+      const match = cachedMatch(matchKey, key, colors, cache);
       if (!match) continue;
       const vote = votes.get(match.color.code) ?? { count: 0, deltaSum: 0, points: [] };
       vote.count += 1;
@@ -499,7 +502,7 @@ export function quantizeImage(
   paletteId: string,
   params: Pick<
     ConvertParams,
-    'dithering' | 'transparentAsEmpty' | 'backgroundTolerance' | 'detailPreserve'
+    'dithering' | 'transparentAsEmpty' | 'backgroundTolerance' | 'detailPreserve' | 'excludeSpecial'
   >,
 ): QuantizeResult {
   if (params.dithering) {

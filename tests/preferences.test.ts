@@ -33,6 +33,7 @@ describe('toggle preferences', () => {
       mergeSmallRegions: DEFAULT_PARAMS.mergeSmallRegions,
       detailPreserve: true,
       dithering: DEFAULT_PARAMS.dithering,
+      excludeSpecial: true,
     });
   });
 
@@ -45,6 +46,7 @@ describe('toggle preferences', () => {
       mergeSmallRegions: false,
       detailPreserve: false,
       dithering: true,
+      excludeSpecial: false,
     };
     const preferences = preferencesFromParams(params, false);
     expect(preferences).toEqual({
@@ -55,6 +57,7 @@ describe('toggle preferences', () => {
       mergeSmallRegions: false,
       detailPreserve: false,
       dithering: true,
+      excludeSpecial: false,
     });
     const restored = withTogglePreferences(DEFAULT_PARAMS, preferences);
     expect(preferencesFromParams(restored, preferences.lockRatio)).toEqual(preferences);

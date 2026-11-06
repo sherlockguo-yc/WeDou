@@ -1,5 +1,5 @@
 import { boardLabel, clampBoardRange, splitBoards } from '../core/boards';
-import { getColor, getPalette } from '../core/palettes';
+import { beadNote, getColor, getPalette } from '../core/palettes';
 import { patternStats, usageRows } from '../core/stats';
 import type { Pattern } from '../core/types';
 import { GRID_BLOCK } from './grid';
@@ -243,14 +243,20 @@ export async function exportPatternPdf(
       doc.setDrawColor(34, 59, 50);
       doc.rect(x, y - 2.6, 3, 3, 'FD');
       doc.setTextColor(34, 59, 50);
-      doc.text(`${row.code.padEnd(6)} x ${String(row.count).padStart(5)}`, x + 5, y);
+      const note = beadNote(pattern.paletteId, row.code);
+      const flags = [
+        note.finish ? 'EFFECT' : '',
+        note.disputedDeltaE ? 'DISPUTED' : '',
+      ].filter(Boolean);
+      const label = flags.length > 0 ? ` [${flags.join('/')}]` : '';
+      doc.text(`${row.code.padEnd(6)} x ${String(row.count).padStart(5)}${label}`, x + 5, y);
     });
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.5);
     doc.setTextColor(107, 115, 105);
     doc.text(
-      'EMPTY CELLS = NO BEAD. Screen/print colours are reference values; use the colour CODES when buying beads.',
+      'EMPTY CELLS = NO BEAD. HEX = REFERENCE ONLY; BUY BY CODE. EFFECT BEADS CHANGE COLOUR - CHECK A PHYSICAL CHART.',
       MARGIN,
       PAGE_H - 8,
     );

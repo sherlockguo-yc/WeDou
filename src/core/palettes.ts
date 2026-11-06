@@ -116,3 +116,24 @@ export function specialCodeCount(paletteId: string): number {
   if (paletteId !== 'mard-291') return 0;
   return getPalette(paletteId).colors.filter((color) => beadNote(paletteId, color.code).finish).length;
 }
+
+/** A separate cache key keeps the filtered colour set from contaminating full-palette matches. */
+export function effectivePaletteKey(paletteId: string, excludeSpecial: boolean): string {
+  return excludeSpecial && paletteId === 'mard-291' ? `${paletteId}|plain` : paletteId;
+}
+
+/** Colours quantisation is allowed to choose from; manual editing still offers every code. */
+export function usableColors(paletteId: string, excludeSpecial: boolean): BeadColor[] {
+  const colors = getPalette(paletteId).colors;
+  if (!excludeSpecial || paletteId !== 'mard-291') return colors;
+  return colors.filter((color) => !beadNote(paletteId, color.code).finish);
+}
+
+export function usableLabCache(paletteId: string, excludeSpecial: boolean): LabCache {
+  const key = effectivePaletteKey(paletteId, excludeSpecial);
+  const cached = cacheByPalette.get(key);
+  if (cached) return cached;
+  const built = buildLabCache(usableColors(paletteId, excludeSpecial));
+  cacheByPalette.set(key, built);
+  return built;
+}

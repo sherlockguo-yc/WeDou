@@ -278,6 +278,12 @@ export default function StudioView(props: StudioProps) {
             onChange={(value) => props.onParam({ detailPreserve: value })}
           />
           <Toggle label="色彩抖动" hint="渐变更细腻，但会产生更多杂点" checked={props.params.dithering} onChange={(value) => props.onParam({ dithering: value })} />
+          <Toggle
+            label="排除特效豆"
+            hint="温变 / 光变 / 珠光 / 果冻 / 夜光 / 透明色号不参与自动选色；关掉后仍可手动选这些色号"
+            checked={props.params.excludeSpecial !== false}
+            onChange={(value) => props.onParam({ excludeSpecial: value })}
+          />
           <button className="btn primary" style={{ width: '100%', marginTop: 'var(--s2)' }} onClick={props.onRegenerate} disabled={!props.hasSource || busy}>
             {props.generated ? <RotateCcw size={15} /> : <LayoutGrid size={15} />}
             {props.generated ? '重新生成' : '生成图纸'}

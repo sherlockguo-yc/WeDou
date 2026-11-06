@@ -1,7 +1,7 @@
 import { drawGrid, gridCanvasSize } from './grid';
 import type { GridOptions } from './grid';
 import { patternStats, usageRows } from '../core/stats';
-import { getPalette } from '../core/palettes';
+import { beadNote, getPalette } from '../core/palettes';
 import type { Pattern } from '../core/types';
 
 const CELL = 32;
@@ -9,6 +9,7 @@ const FOOTER_ROW = 36;
 const FOOTER_TOP = 16;
 const CHART_TOP = 80;
 const TABLE_GAP = 24;
+const NOTE_LINE_GAP = 20;
 
 /** Exports never receive preview interaction state; tests lock this down. */
 export const PNG_GRID_OPTIONS: GridOptions = {
@@ -16,6 +17,15 @@ export const PNG_GRID_OPTIONS: GridOptions = {
   showCodes: true,
   showCoordinates: true,
 };
+
+/** Exports are print artefacts: captions stay ASCII and are derived from the pattern itself. */
+export function exportNote(paletteId: string, code: string): string {
+  const note = beadNote(paletteId, code);
+  if (note.finish && note.disputedDeltaE) return 'EFFECT / DISPUTED';
+  if (note.finish) return 'EFFECT';
+  if (note.disputedDeltaE) return 'DISPUTED';
+  return '';
+}
 
 /** Canvas geometry is pure so tests can prove every legend row fits. */
 export function pngLayout(pattern: Pattern): {
@@ -28,7 +38,7 @@ export function pngLayout(pattern: Pattern): {
 } {
   const grid = gridCanvasSize(pattern, CELL);
   const rowCount = usageRows(pattern).length;
-  const footerHeight = FOOTER_TOP + 8 + Math.max(4, rowCount) * FOOTER_ROW + 56;
+  const footerHeight = FOOTER_TOP + 8 + Math.max(4, rowCount) * FOOTER_ROW + 56 + NOTE_LINE_GAP;
   const width = Math.max(grid.width + 40, 720);
   const tableTop = CHART_TOP + grid.height + TABLE_GAP;
   const lastRowY = tableTop + FOOTER_TOP + rowCount * FOOTER_ROW;
@@ -37,7 +47,7 @@ export function pngLayout(pattern: Pattern): {
     height: tableTop + footerHeight,
     tableTop,
     lastRowY,
-    footerNoteY: lastRowY + FOOTER_ROW,
+    footerNoteY: lastRowY + FOOTER_ROW + NOTE_LINE_GAP,
     rowCount,
   };
 }
@@ -85,12 +95,14 @@ export function renderPatternPng(pattern: Pattern): HTMLCanvasElement {
     tableTop,
   );
 
+  const hasNotes = rows.some((row) => exportNote(pattern.paletteId, row.code) !== '');
   let y = tableTop + FOOTER_TOP;
   ctx.font = '12px ui-monospace, monospace';
   ctx.fillStyle = '#6B7369';
   ctx.fillText('CODE', 70, y);
   ctx.fillText('COUNT', 190, y);
   ctx.fillText('RATIO', 280, y);
+  if (hasNotes) ctx.fillText('NOTE', 360, y);
   y += 8;
   ctx.strokeStyle = '#223B32';
   ctx.beginPath();
@@ -110,10 +122,19 @@ export function renderPatternPng(pattern: Pattern): HTMLCanvasElement {
     ctx.fillText(String(row.count), 190, y);
     ctx.fillStyle = '#6B7369';
     ctx.fillText(`${(row.ratio * 100).toFixed(1)}%`, 280, y);
+    const label = exportNote(pattern.paletteId, row.code);
+    if (label) ctx.fillText(label, 360, y);
   }
   ctx.font = '12px ui-monospace, monospace';
   ctx.fillStyle = '#6B7369';
   ctx.fillText('EMPTY CELLS = NO BEAD', 24, y + FOOTER_ROW);
+  if (hasNotes) {
+    ctx.fillText(
+      'EFFECT = COLOUR VARIES (TEMPERATURE / UV / ANGLE); DISPUTED = CROSS-SOURCE HEX DIFFERENCE',
+      24,
+      y + FOOTER_ROW + NOTE_LINE_GAP,
+    );
+  }
 
   return canvas;
 }

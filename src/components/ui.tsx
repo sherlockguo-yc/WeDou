@@ -180,8 +180,8 @@ export function ColorSearch({
             >
               <span className="color-swatch" style={{ background: color.hex }} />
               {color.code}
-              {note.finish ? <Sparkles size={12} style={{ flexShrink: 0 }} /> : null}
-              {note.disputedDeltaE ? <AlertTriangle size={12} style={{ flexShrink: 0 }} /> : null}
+              {note.finish ? <Sparkles size={12} style={{ flexShrink: 0 }} aria-label="特效豆" /> : null}
+              {note.disputedDeltaE ? <AlertTriangle size={12} style={{ flexShrink: 0 }} aria-label="多来源色值差异" /> : null}
             </button>
           );
         })}

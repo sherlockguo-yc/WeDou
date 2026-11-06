@@ -226,7 +226,7 @@ describe('export geometry and editing primitives', () => {
       expect(layout.rowCount).toBe(count);
       expect(layout.width).toBeGreaterThanOrEqual(720);
       expect(layout.height).toBeGreaterThan(layout.lastRowY);
-      expect(layout.height).toBeGreaterThan(layout.footerNoteY);
+      expect(layout.height).toBeGreaterThanOrEqual(layout.footerNoteY + 12);
     }
   });
 
