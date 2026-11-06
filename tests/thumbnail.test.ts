@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPattern } from '../src/core/pattern';
-import { THUMB_EMPTY, renderThumbDataUrl, thumbFor, thumbPixels, thumbSize } from '../src/render/thumbnail';
+import {
+  PREVIEW_SIDE,
+  THUMB_EMPTY,
+  THUMB_MAX_SIDE,
+  renderGridPreview,
+  renderThumbDataUrl,
+  thumbFor,
+  thumbPixels,
+  thumbSize,
+} from '../src/render/thumbnail';
 
 function makePattern(cells: (string | null)[]) {
   return createPattern({ name: '测试图纸', w: 2, h: 2, paletteId: 'mard-221', cells });
@@ -88,5 +97,33 @@ describe('thumbnail rendering', () => {
     expect(fillRect).toHaveBeenCalledTimes(4);
     thumbFor({ ...pattern, version: pattern.version + 1 });
     expect(fillRect).toHaveBeenCalledTimes(8);
+  });
+});
+
+describe('market large preview', () => {
+  it('rebuilds from a bare grid at the requested size and rejects malformed grids', () => {
+    const sizes: number[] = [];
+    vi.stubGlobal('document', {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ fillStyle: '', fillRect: () => undefined }),
+        toDataURL() {
+          sizes.push(this.width, this.height);
+          return 'data:image/png;base64,preview';
+        },
+      }),
+    });
+    expect(renderGridPreview(Array(256).fill('A1'), 16, 16, 'mard-221', 8))
+      .toBe('data:image/png;base64,preview');
+    expect(sizes).toEqual([8, 8]);
+    expect(renderGridPreview(['A1'], 16, 16, 'mard-221', 8)).toBe('');
+  });
+
+  it('keeps more cells than the stored thumbnail on large charts', () => {
+    expect(PREVIEW_SIDE).toBeGreaterThan(THUMB_MAX_SIDE);
+    expect(thumbSize(400, 400, THUMB_MAX_SIDE)).toEqual({ width: 200, height: 200 });
+    expect(thumbSize(400, 400, PREVIEW_SIDE)).toEqual({ width: 400, height: 400 });
+    expect(thumbSize(900, 450, PREVIEW_SIDE)).toEqual({ width: 640, height: 320 });
   });
 });

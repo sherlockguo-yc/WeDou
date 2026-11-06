@@ -40,11 +40,13 @@ export function Modal({
   children,
   onClose,
   nested,
+  wide,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   nested?: boolean;
+  wide?: boolean;
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -56,7 +58,7 @@ export function Modal({
 
   return (
     <div className={`modal-mask${nested ? ' nested' : ''}`} onMouseDown={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+      <div className={`modal${wide ? ' wide' : ''}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <div className="panel-head">
           <h2>{title}</h2>
           <button className="btn ghost small" onClick={onClose} aria-label="关闭">

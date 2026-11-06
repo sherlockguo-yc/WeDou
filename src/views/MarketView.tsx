@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PackageOpen, Search, Store, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { MarketItem, MarketSummary, User } from '../api/client';
+import MarketPreview from '../components/MarketPreview';
 import PatternThumb from '../components/PatternThumb';
 import { Modal, Notice } from '../components/ui';
 import { getPalette } from '../core/palettes';
@@ -173,9 +174,9 @@ export default function MarketView({
       </section>
 
       {detail ? (
-        <Modal title={detail.name} onClose={() => setDetail(null)}>
+        <Modal title={detail.name} onClose={() => setDetail(null)} wide>
           <div className="market-detail">
-            <PatternThumb src={detail.thumb} alt={`${detail.name} 预览`} />
+            <MarketPreview item={detail} />
             <dl className="market-detail-meta">
               <dt>作者</dt><dd>{detail.ownerName}</dd>
               <dt>尺寸</dt><dd>{detail.w}×{detail.h} 格</dd>
