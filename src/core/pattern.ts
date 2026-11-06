@@ -2,6 +2,8 @@ import { DEFAULT_PALETTE_ID } from './palettes';
 import { DEFAULT_PARAMS } from './types';
 import type { BeadSize, Cell, ConvertParams, Pattern } from './types';
 
+export const DEFAULT_PATTERN_NAME = '未命名图纸';
+
 export function newId(): string {
   return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -25,7 +27,7 @@ export function createPattern(input: CreatePatternInput): Pattern {
   }
   return {
     id: input.id ?? newId(),
-    name: input.name ?? '未命名图纸',
+    name: input.name ?? DEFAULT_PATTERN_NAME,
     w,
     h,
     paletteId: input.paletteId ?? DEFAULT_PALETTE_ID,

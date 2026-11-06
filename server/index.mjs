@@ -15,10 +15,17 @@ import {
 } from './auth.mjs';
 import {
   backupNow,
+  getMarketItem,
+  getMarketOwner,
   getPattern,
   initDb,
+  listMarket,
   listPatterns,
+  listSharedItems,
+  removeMarketItem,
   removePattern,
+  sanitizeSearch,
+  upsertMarketItem,
   upsertPattern,
 } from './store.mjs';
 
@@ -50,6 +57,24 @@ function validPattern(pattern) {
     pattern.h > 0 &&
     pattern.h <= 300
   );
+}
+
+const DEFAULT_PATTERN_NAME = '未命名图纸';
+const THUMB_PREFIX = 'data:image/png;base64,';
+const MAX_THUMB_LENGTH = 200_000;
+
+function validMarketName(name) {
+  const clean = String(name ?? '').trim();
+  return clean.length >= 1 && clean.length <= 80 && clean !== DEFAULT_PATTERN_NAME;
+}
+
+function validThumb(thumb) {
+  return typeof thumb === 'string' && thumb.startsWith(THUMB_PREFIX) && thumb.length <= MAX_THUMB_LENGTH;
+}
+
+function clampInt(value, fallback, min, max) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(min, Math.min(max, Math.trunc(parsed))) : fallback;
 }
 
 app.get('/api/health', (_req, res) => {
@@ -130,6 +155,63 @@ app.delete('/api/patterns/:id', (req, res) => {
   const user = requireUser(req, res);
   if (!user) return;
   removePattern(user.id, req.params.id);
+  res.json({ ok: true });
+});
+
+/* ---------- public market: reads are anonymous, writes require the owner ---------- */
+
+app.get('/api/market', (req, res) => {
+  const q = sanitizeSearch(req.query.q);
+  const limit = clampInt(req.query.limit, 24, 1, 60);
+  const offset = clampInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  const viewer = userFromRequest(req);
+  const { items, total } = listMarket({ q, limit, offset });
+  res.json({ items, total, shared: viewer ? listSharedItems(viewer.id) : [] });
+});
+
+app.get('/api/market/:id', (req, res) => {
+  const item = getMarketItem(req.params.id);
+  if (!item) {
+    res.status(404).json({ error: '图纸不存在或已撤销分享' });
+    return;
+  }
+  res.json({ item });
+});
+
+app.post('/api/market', (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const pattern = req.body?.pattern;
+  const thumb = req.body?.thumb;
+  if (!validPattern(pattern) || !pattern.cells.every((cell) => cell === null || typeof cell === 'string')) {
+    res.status(400).json({ error: '工程数据不合法' });
+    return;
+  }
+  if (!validMarketName(pattern.name)) {
+    res.status(400).json({ error: '请先给图纸起个名字（1–80 字，不能用「未命名图纸」）' });
+    return;
+  }
+  if (!validThumb(thumb)) {
+    res.status(400).json({ error: '预览图不合法' });
+    return;
+  }
+  const item = upsertMarketItem(user, { ...pattern, name: String(pattern.name).trim() }, thumb);
+  res.json({ item });
+});
+
+app.delete('/api/market/:id', (req, res) => {
+  const user = requireUser(req, res);
+  if (!user) return;
+  const owner = getMarketOwner(req.params.id);
+  if (!owner) {
+    res.status(404).json({ error: '图纸不存在或已撤销分享' });
+    return;
+  }
+  if (owner !== user.id) {
+    res.status(403).json({ error: '只能撤销自己发布的图纸' });
+    return;
+  }
+  removeMarketItem(req.params.id);
   res.json({ ok: true });
 });
 

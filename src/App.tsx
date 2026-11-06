@@ -1,17 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Grid2X2, HardDrive, LayoutGrid, LogIn, LogOut, Package, Wrench } from 'lucide-react';
+import { Grid2X2, HardDrive, LayoutGrid, LogIn, LogOut, Package, Store, Wrench } from 'lucide-react';
 import { api } from './api/client';
-import type { User } from './api/client';
+import type { MarketItem, User } from './api/client';
 import AuthModal from './views/AuthModal';
 import GuideView from './views/GuideView';
 import LibraryView from './views/LibraryView';
+import MarketView from './views/MarketView';
 import StudioView from './views/StudioView';
 import type { Tool } from './views/StudioView';
 import { ConfirmModal, Toast } from './components/ui';
 import { recommendGridSize } from './core/boards';
 import { quantizeImage } from './core/convert';
 import { optimizeGrid } from './core/optimize';
-import { createPattern, parsePattern, replaceCode as replaceCodeCells, serialize, touch } from './core/pattern';
+import {
+  createPattern,
+  DEFAULT_PATTERN_NAME,
+  parsePattern,
+  replaceCode as replaceCodeCells,
+  serialize,
+  touch,
+} from './core/pattern';
 import { DEFAULT_PALETTE_ID, getPalette } from './core/palettes';
 import {
   isTogglePatch,
@@ -26,8 +34,9 @@ import { DEFAULT_PARAMS } from './core/types';
 import type { BeadSize, ConvertParams, Pattern } from './core/types';
 import { downloadCanvas, renderPatternPng } from './render/png';
 import { exportPatternPdf } from './render/pdf';
+import { thumbFor } from './render/thumbnail';
 
-type View = 'studio' | 'guide' | 'library';
+type View = 'studio' | 'guide' | 'library' | 'market';
 type Status = 'empty' | 'loading' | 'ready' | 'exporting' | 'error';
 type ToastState = { message: string; kind: 'info' | 'error' } | null;
 type ConfirmState = { message: string; onConfirm: () => void } | null;
@@ -40,9 +49,16 @@ const MAX_DIMENSION = 4000;
 /** GitHub Pages builds have no Express backend; every feature still works locally. */
 const STATIC_MODE = import.meta.env.VITE_STATIC_MODE === '1';
 
-function readDrafts(): Pattern[] {
+/** Local drafts are per account: switching users must never leak private charts. */
+function draftsKey(userId: string | null): string {
+  return userId ? `${DRAFTS_KEY}.${userId}` : DRAFTS_KEY;
+}
+
+let activeUserId: string | null = null;
+
+function readDrafts(userId: string | null = activeUserId): Pattern[] {
   try {
-    const raw = localStorage.getItem(DRAFTS_KEY);
+    const raw = localStorage.getItem(draftsKey(userId));
     const value: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(value) ? (value as Pattern[]) : [];
   } catch {
@@ -59,14 +75,18 @@ function initialStudioState(): { params: ConvertParams; lockRatio: boolean } {
   };
 }
 
+function writeDrafts(patterns: Pattern[], userId: string | null = activeUserId): void {
+  try {
+    localStorage.setItem(draftsKey(userId), JSON.stringify(patterns));
+  } catch {
+    // Quota exceeded or storage disabled: the in-memory copy still works this session.
+  }
+}
+
 function upsertDraft(pattern: Pattern): Pattern[] {
   const drafts = readDrafts().filter((item) => item.id !== pattern.id);
   const next = [pattern, ...drafts].slice(0, 60);
-  try {
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(next));
-  } catch {
-    // Quota exceeded: the in-memory copy still works for this session.
-  }
+  writeDrafts(next);
   return next;
 }
 
@@ -127,15 +147,25 @@ export default function App() {
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  activeUserId = user?.id ?? null;
   const [cloud, setCloud] = useState<Pattern[]>([]);
-  const [drafts, setDrafts] = useState<Pattern[]>(readDrafts);
+  const [drafts, setDrafts] = useState<Pattern[]>(() => readDrafts());
   const [highlightCode, setHighlightCode] = useState<string | null>(null);
+  const [marketShared, setMarketShared] = useState<{ id: string; sourceId: string }[]>([]);
+  const [marketRefresh, setMarketRefresh] = useState(0);
+  const [marketBusy, setMarketBusy] = useState(false);
 
   useEffect(() => {
     if (highlightCode && (!pattern || !pattern.cells.includes(highlightCode))) {
       setHighlightCode(null);
     }
   }, [pattern, highlightCode]);
+
+  const sharedBySource = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const item of marketShared) map[item.sourceId] = item.id;
+    return map;
+  }, [marketShared]);
 
   const requestRef = useRef(0);
   const patternRef = useRef<Pattern | null>(null);
@@ -177,6 +207,148 @@ export default function App() {
     if (user) void refreshCloud();
     else setCloud([]);
   }, [user, refreshCloud]);
+
+  /** Switch draft buckets with the account; adopt unsigned drafts on the first login. */
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const own = readDrafts(user?.id ?? null);
+      const unsigned = user ? readDrafts(null) : [];
+      if (unsigned.length === 0) {
+        if (!cancelled) setDrafts(own);
+        return;
+      }
+      const merged = mergedLibrary(unsigned, own);
+      writeDrafts(merged, user?.id ?? null);
+      try { localStorage.removeItem(DRAFTS_KEY); } catch { /* storage disabled */ }
+      if (!cancelled) setDrafts(merged);
+      for (const draft of merged) {
+        try { await api.savePattern(draft); } catch { /* keep the local draft */ }
+      }
+      await refreshCloud();
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, [user, refreshCloud]);
+
+  /* ---------- market ---------- */
+  const refreshMarketShared = useCallback(async () => {
+    if (STATIC_MODE || !backendAvailable) {
+      setMarketShared([]);
+      return;
+    }
+    try {
+      const result = await api.listMarket('', 1, 0);
+      setMarketShared(result.shared);
+    } catch {
+      // Keep the last known state; MarketView owns its own error state.
+    }
+  }, [backendAvailable]);
+
+  useEffect(() => {
+    void refreshMarketShared();
+  }, [refreshMarketShared, user]);
+
+  const updateShared = useCallback((shared: { id: string; sourceId: string }[]) => {
+    setMarketShared(shared);
+  }, []);
+
+  const shareToMarket = async (target: Pattern) => {
+    if (STATIC_MODE || !backendAvailable) {
+      notify('本地模式或后端不可用，无法分享到图纸市集', 'error');
+      return;
+    }
+    if (!user) {
+      notify('请先登录后再分享到图纸市集', 'error');
+      setAuthOpen(true);
+      return;
+    }
+    const name = target.name.trim();
+    if (!name || name === DEFAULT_PATTERN_NAME) {
+      notify('请先给图纸起个名字再分享', 'error');
+      return;
+    }
+    const thumb = thumbFor(target);
+    if (!thumb) {
+      notify('预览图生成失败，请重试', 'error');
+      return;
+    }
+    setMarketBusy(true);
+    try {
+      await api.sharePattern({ ...target, name }, thumb);
+      await refreshMarketShared();
+      setMarketRefresh((value) => value + 1);
+      notify(`「${name}」已发布到图纸市集`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '分享失败', 'error');
+    } finally {
+      setMarketBusy(false);
+    }
+  };
+
+  const unshareFromMarket = async (marketId: string) => {
+    setMarketBusy(true);
+    try {
+      await api.unsharePattern(marketId);
+      await refreshMarketShared();
+      setMarketRefresh((value) => value + 1);
+      notify('已撤销分享');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '撤销失败', 'error');
+    } finally {
+      setMarketBusy(false);
+    }
+  };
+
+  const renamePattern = async (id: string, name: string) => {
+    const all = mergedLibrary(readDrafts(), cloud);
+    const target = all.find((item) => item.id === id);
+    if (!target) return;
+    const next = touch({ ...target, name });
+    setDrafts(upsertDraft(next));
+    const current = patternRef.current;
+    if (current?.id === id) {
+      setPattern({ ...current, name, version: next.version, updatedAt: next.updatedAt });
+    }
+    if (user) {
+      try {
+        await api.savePattern(next);
+        await refreshCloud();
+      } catch {
+        notify('云端改名失败，本地副本已更新', 'error');
+        return;
+      }
+    }
+    notify(`已改名为「${name}」`);
+  };
+
+  const saveMarketToLibrary = async (item: MarketItem) => {
+    try {
+      const copy = createPattern({
+        name: item.name,
+        w: item.w,
+        h: item.h,
+        paletteId: item.paletteId,
+        beadSize: item.beadSize,
+        cells: item.cells,
+        params: item.params,
+      });
+      setDrafts(upsertDraft(copy));
+      if (user) {
+        try {
+          await api.savePattern(copy);
+          await refreshCloud();
+        } catch {
+          notify('已存到本地草稿，但云端同步失败', 'error');
+          return;
+        }
+      }
+      setView('library');
+      notify(`「${item.name}」已保存到图纸仓库`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '保存失败', 'error');
+    }
+  };
 
   /* ---------- conversion pipeline ---------- */
   useEffect(() => {
@@ -597,7 +769,7 @@ export default function App() {
 
   const deletePattern = async (id: string) => {
     const next = readDrafts().filter((item) => item.id !== id);
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(next));
+    writeDrafts(next);
     setDrafts(next);
     if (user) {
       try {
@@ -645,11 +817,8 @@ export default function App() {
   const onAuthSuccess = async (nextUser: User) => {
     setUser(nextUser);
     setAuthOpen(false);
-    const local = readDrafts();
-    for (const draft of local) {
-      try { await api.savePattern(draft); } catch { /* keep the local draft */ }
-    }
     await refreshCloud();
+    setMarketRefresh((value) => value + 1);
     notify(`已登录为 ${nextUser.username}，本地草稿已同步`);
   };
 
@@ -666,7 +835,7 @@ export default function App() {
             <span className="brand-dot" style={{ background: '#efe3c8' }} />
           </span>
           <span>
-            <span className="brand-name">豆格</span>
+            <span className="brand-name">微豆</span>
             <span className="brand-tag"> BEAD CHART ATELIER</span>
           </span>
         </div>
@@ -679,14 +848,19 @@ export default function App() {
             <Grid2X2 size={14} /> 开始拼
           </button>
           <button className={view === 'library' ? 'active' : ''} onClick={() => setView('library')}>
-            <LayoutGrid size={14} /> 图纸库
+            <LayoutGrid size={14} /> 图纸仓库
           </button>
+          {!STATIC_MODE && backendAvailable ? (
+            <button className={view === 'market' ? 'active' : ''} onClick={() => setView('market')}>
+              <Store size={14} /> 图纸市集
+            </button>
+          ) : null}
         </nav>
 
         <div className="topbar-right">
           {user ? <span className="user-chip"><Package size={12} /> {user.username}</span> : null}
           {user ? (
-            <button className="btn small ghost" onClick={async () => { await api.logout().catch(() => undefined); setUser(null); notify('已退出登录'); }}>
+            <button className="btn small ghost" onClick={async () => { await api.logout().catch(() => undefined); setUser(null); setMarketShared([]); setMarketRefresh((value) => value + 1); notify('已退出登录'); }}>
               <LogOut size={14} /> 退出
             </button>
           ) : backendAvailable ? (
@@ -758,11 +932,29 @@ export default function App() {
           <LibraryView
             patterns={library}
             user={user}
+            sharedBySource={sharedBySource}
+            marketAvailable={!STATIC_MODE && backendAvailable}
+            busy={marketBusy}
             onOpen={openPattern}
             onDelete={(id) => void deletePattern(id)}
             onDuplicate={(id) => void duplicatePattern(id)}
             onImport={(file) => void importProject(file)}
             onLogin={backendAvailable ? () => setAuthOpen(true) : undefined}
+            onRename={(id, name) => void renamePattern(id, name)}
+            onShare={(target) => void shareToMarket(target)}
+            onUnshare={(marketId) => void unshareFromMarket(marketId)}
+          />
+        ) : null}
+
+        {view === 'market' && !STATIC_MODE && backendAvailable ? (
+          <MarketView
+            user={user}
+            refreshToken={marketRefresh}
+            onShared={updateShared}
+            onLogin={backendAvailable ? () => setAuthOpen(true) : undefined}
+            onSaveToLibrary={(item) => void saveMarketToLibrary(item)}
+            onUnshare={(marketId) => void unshareFromMarket(marketId)}
+            notify={notify}
           />
         ) : null}
       </main>

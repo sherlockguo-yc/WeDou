@@ -1,9 +1,34 @@
-import type { Pattern } from '../core/types';
+import type { BeadSize, Cell, ConvertParams, Pattern } from '../core/types';
 
 export interface User {
   id: string;
   username: string;
   createdAt: string;
+}
+
+export interface MarketSummary {
+  id: string;
+  sourceId: string;
+  ownerId: string;
+  ownerName: string;
+  name: string;
+  w: number;
+  h: number;
+  paletteId: string;
+  beadSize: BeadSize;
+  thumb: string;
+  createdAt: string;
+}
+
+export interface MarketItem extends MarketSummary {
+  cells: Cell[];
+  params: ConvertParams;
+}
+
+export interface MarketList {
+  items: MarketSummary[];
+  total: number;
+  shared: { id: string; sourceId: string }[];
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -51,4 +76,17 @@ export const api = {
     }),
   deletePattern: (id: string) =>
     request<{ ok: boolean }>(`/api/patterns/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  listMarket: (q = '', limit = 24, offset = 0) =>
+    request<MarketList>(
+      `/api/market?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`,
+    ),
+  getMarketItem: (id: string) =>
+    request<{ item: MarketItem }>(`/api/market/${encodeURIComponent(id)}`),
+  sharePattern: (pattern: Pattern, thumb: string) =>
+    request<{ item: MarketItem }>('/api/market', {
+      method: 'POST',
+      body: JSON.stringify({ pattern, thumb }),
+    }),
+  unsharePattern: (id: string) =>
+    request<{ ok: boolean }>(`/api/market/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };

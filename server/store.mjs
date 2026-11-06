@@ -24,6 +24,10 @@ const SECRET_FILE = path.join(DATA, 'secret');
 
 const PATTERN_COLUMNS =
   'id, user_id, name, w, h, palette_id, bead_size, cells, params, progress, version, updated_at';
+const MARKET_COLUMNS =
+  'id, source_id, owner_id, owner_name, name, w, h, palette_id, bead_size, cells, params, thumb, created_at';
+const MARKET_SUMMARY_COLUMNS =
+  'id, source_id, owner_id, owner_name, name, w, h, palette_id, bead_size, thumb, created_at';
 
 let db = null;
 let lastBackupAt = 0;
@@ -121,6 +125,27 @@ function rowToPattern(row) {
   };
 }
 
+function rowToMarketSummary(row) {
+  return {
+    id: row.id,
+    sourceId: row.source_id,
+    ownerId: row.owner_id,
+    ownerName: row.owner_name,
+    name: row.name,
+    w: row.w,
+    h: row.h,
+    paletteId: row.palette_id,
+    beadSize: row.bead_size,
+    thumb: row.thumb,
+    createdAt: row.created_at,
+  };
+}
+
+/** Bounds the query; matching uses instr(), so % and _ stay literal characters. */
+export function sanitizeSearch(value, maxLength = 80) {
+  return String(value ?? '').trim().slice(0, maxLength);
+}
+
 function userFromRow(row) {
   return {
     id: row.id,
@@ -133,6 +158,7 @@ function userFromRow(row) {
 }
 
 const INSERT_PATTERN = `INSERT OR REPLACE INTO patterns (${PATTERN_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`;
+const INSERT_MARKET = `INSERT OR REPLACE INTO market_items (${MARKET_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`;
 
 /** One-time import of the pre-SQLite JSON files; originals are kept as .migrated. */
 function migrateLegacy() {
@@ -188,6 +214,23 @@ export async function initDb() {
     PRIMARY KEY (user_id, id)
   )`);
   run('CREATE INDEX IF NOT EXISTS idx_patterns_user ON patterns(user_id, updated_at DESC)');
+  run(`CREATE TABLE IF NOT EXISTS market_items (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    owner_name TEXT NOT NULL,
+    name TEXT NOT NULL,
+    w INTEGER NOT NULL,
+    h INTEGER NOT NULL,
+    palette_id TEXT NOT NULL DEFAULT '',
+    bead_size TEXT NOT NULL DEFAULT '5mm',
+    cells TEXT NOT NULL,
+    params TEXT NOT NULL DEFAULT '{}',
+    thumb TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE (owner_id, source_id)
+  )`);
+  run('CREATE INDEX IF NOT EXISTS idx_market_created ON market_items(created_at DESC, id DESC)');
 
   migrateLegacy();
   persist();
@@ -238,7 +281,7 @@ export function updateCredentials(id, passwordHash, salt, recoveryHash) {
   );
 }
 
-/* ---------- patterns ---------- */
+/* ---------- private patterns ---------- */
 
 export function listPatterns(userId) {
   return all(
@@ -259,6 +302,77 @@ export function upsertPattern(userId, pattern) {
 
 export function removePattern(userId, id) {
   exec('DELETE FROM patterns WHERE user_id = ? AND id = ?', [userId, id]);
+}
+
+/* ---------- public market ---------- */
+
+/** Summaries never carry cells/params: the list must stay cheap to transfer. */
+export function listMarket({ q = '', limit = 24, offset = 0 } = {}) {
+  const needle = sanitizeSearch(q);
+  const where = needle
+    ? 'WHERE instr(lower(name), lower(?)) > 0 OR instr(lower(owner_name), lower(?)) > 0'
+    : '';
+  const params = needle ? [needle, needle] : [];
+  const counted = one(`SELECT COUNT(*) AS n FROM market_items ${where}`, params);
+  const total = Number(counted?.n ?? 0);
+  const rows = all(
+    `SELECT ${MARKET_SUMMARY_COLUMNS} FROM market_items ${where}
+     ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset],
+  );
+  return { items: rows.map(rowToMarketSummary), total };
+}
+
+/** Lets the signed-in author find and revoke their own published items. */
+export function listSharedItems(userId) {
+  if (!userId) return [];
+  return all('SELECT id, source_id FROM market_items WHERE owner_id = ?', [userId])
+    .map((row) => ({ id: row.id, sourceId: row.source_id }));
+}
+
+export function getMarketItem(id) {
+  const row = one(`SELECT ${MARKET_COLUMNS} FROM market_items WHERE id = ?`, [id]);
+  if (!row) return null;
+  return {
+    ...rowToMarketSummary(row),
+    cells: parseJson(row.cells, []),
+    params: parseJson(row.params, {}),
+  };
+}
+
+export function getMarketOwner(id) {
+  const row = one('SELECT owner_id FROM market_items WHERE id = ?', [id]);
+  return row?.owner_id ?? null;
+}
+
+/** Republishing the same private pattern updates one row instead of spamming the market. */
+export function upsertMarketItem(user, pattern, thumb) {
+  const existing = one(
+    'SELECT id, created_at FROM market_items WHERE owner_id = ? AND source_id = ?',
+    [user.id, pattern.id],
+  );
+  const id = existing?.id ?? randomBytes(12).toString('hex');
+  const createdAt = existing?.created_at ?? new Date().toISOString();
+  exec(INSERT_MARKET, [
+    id,
+    pattern.id,
+    user.id,
+    user.username,
+    pattern.name.trim(),
+    pattern.w,
+    pattern.h,
+    pattern.paletteId ?? '',
+    pattern.beadSize ?? '5mm',
+    JSON.stringify(pattern.cells),
+    JSON.stringify(pattern.params ?? {}),
+    thumb,
+    createdAt,
+  ]);
+  return getMarketItem(id);
+}
+
+export function removeMarketItem(id) {
+  exec('DELETE FROM market_items WHERE id = ?', [id]);
 }
 
 export function backupNow() {
