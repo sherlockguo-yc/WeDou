@@ -848,7 +848,7 @@ export default function App() {
             <span className="brand-dot" style={{ background: '#efe3c8' }} />
           </span>
           <span>
-            <span className="brand-name">微豆</span>
+            <span className="brand-name">WeDou</span>
             <span className="brand-tag"> BEAD CHART ATELIER</span>
           </span>
         </div>
